@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "deny": [
+      "Read(//media/data2/www/sites/**)",
+      "Bash(cat //media/data2/www/sites/*)",
+      "Bash(grep * //media/data2/www/sites/*)"
+    ],
+    "ask": [
+      "Bash(rm *)",
+      "Bash(git push *)"
+    ]
+  }
+}
