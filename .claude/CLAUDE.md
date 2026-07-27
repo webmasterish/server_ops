@@ -1,6 +1,6 @@
 # server_ops
 
-Infrastructure and server-management repo for DotAim. Scripts, nginx
+Infrastructure and server-management repo for DotAim. Scripts, Apache
 templates, runbooks, and server inventory. Not a web project — nothing
 here is served.
 
@@ -20,7 +20,8 @@ and for Hostinger use `ssh u918436082@hostinger`
 
 Migrate all sites off `hostinger` onto `hetzner` before the plan lapses.
 Mostly low-traffic static HTML and WordPress. No hosting control panel —
-plain nginx + PHP-FPM, provisioned by scripts in this repo.
+plain Apache + PHP, provisioned by scripts in this repo. Apache is the
+deliberate choice: it matches the local dev environment.
 
 Hard deadline is NOT the migration itself. By 2026-07-31 we need:
 complete verified backups of everything on Hostinger, and DNS moved off
@@ -43,7 +44,7 @@ Two items to resolve before anything else:
 ## Layout
 
 - `scripts/` — provisioning, backup, migration scripts
-- `templates/` — nginx vhost, PHP-FPM pool, systemd units
+- `templates/` — Apache vhost, PHP pool, systemd units
 - `docs/` — inventory.md, runbooks
 - `migration/` — working notes and logs for the Hostinger migration
 
