@@ -54,15 +54,18 @@ EXCLUDES=(--exclude='backups/')
 # No -z: section 1.5 measured the payload as ~88% already-compressed media, so
 # compression burns CPU for almost nothing.
 #
-# --delete matters on re-runs: it is what removes content dropped at the source
-# (or newly excluded here) instead of leaving it behind to rot in the backup.
-rsync -a --delete --stats "${EXCLUDES[@]}" \
+# --delete removes content dropped at the source. --delete-excluded is the one
+# that matters here: plain --delete *protects* excluded paths on the receiver,
+# so a site synced before backups/ was excluded keeps its stale copy forever and
+# the count check below fails with dest > source. Needed any time an exclusion
+# is added after a sync already happened.
+rsync -a --delete --delete-excluded --stats "${EXCLUDES[@]}" \
   -e "ssh ${SSH_OPTS[*]}" \
   "${REMOTE}:domains/${DOMAIN}/" "${SITE_DIR}/"
 
 # The source count must apply the same exclusions, or the check below compares
 # unlike things and fails on every site that has a backups/ directory.
-SRC_COUNT=$(ssh "${SSH_OPTS[@]}" "${REMOTE}" \
+SRC_COUNT=$(ssh -n "${SSH_OPTS[@]}" "${REMOTE}" \
   "find domains/${DOMAIN} -type f -not -path '*/backups/*' | wc -l")
 DST_COUNT=$(find "${SITE_DIR}" -type f | wc -l)
 
@@ -86,7 +89,7 @@ if [[ "${WP_PATH}" != "--no-db" ]]; then
   if [[ "${WP_PATH}" == "--piwigo" ]]; then
     # Piwigo keeps its settings in local/config/database.inc.php as a $conf
     # array -- no wp-cli involved.
-    DB_NAME=$(ssh "${SSH_OPTS[@]}" "${REMOTE}" \
+    DB_NAME=$(ssh -n "${SSH_OPTS[@]}" "${REMOTE}" \
       "cd domains/${DOMAIN}/public_html && php -r '\$conf=array(); include \"local/config/database.inc.php\"; echo \$conf[\"db_base\"];'" \
       | tr -d '[:space:]')
   else
@@ -97,7 +100,7 @@ if [[ "${WP_PATH}" != "--no-db" ]]; then
     WP_CMD="cd domains/${DOMAIN}/public_html && SERVER_NAME=${DOMAIN} wp"
     WP_ARGS="--path=${WP_PATH} --skip-themes --skip-plugins"
 
-    DB_NAME=$(ssh "${SSH_OPTS[@]}" "${REMOTE}" \
+    DB_NAME=$(ssh -n "${SSH_OPTS[@]}" "${REMOTE}" \
       "${WP_CMD} db query 'SELECT DATABASE();' --skip-column-names ${WP_ARGS}" \
       | tr -d '[:space:]')
   fi

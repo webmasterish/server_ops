@@ -58,7 +58,10 @@ echo "=============================================================="
 FAILED=()
 OK=()
 
-while IFS=$'\t' read -r domain mode; do
+# Read the site list on fd 3, not stdin. ssh inside the loop body reads stdin
+# greedily and will swallow the remaining lines -- the first run of this script
+# backed up menamaps.com and then silently skipped the other 13 sites.
+while IFS=$'\t' read -r domain mode <&3; do
   [[ -z "${domain}" ]] && continue
   echo
   echo "-------------------------------------------------------------"
@@ -70,7 +73,7 @@ while IFS=$'\t' read -r domain mode; do
     echo "*** FAILED: ${domain}"
     FAILED+=("${domain}")
   fi
-done <<< "${SITES}"
+done 3<<< "${SITES}"
 
 # ---------------------------------------------------------------------------
 # Account-root files -- menamaps tooling that lives outside any docroot and

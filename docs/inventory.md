@@ -480,10 +480,26 @@ Why the theoretical concern did not materialise:
   which is exactly the intent.
 - Every table is InnoDB. No storage-engine translation needed.
 
-**Residual, and it is small:** confirm the collation set per dump rather than
-assuming. One `grep -oE "COLLATE=[a-z0-9_]+"` per file, already part of the
-verify step. If any database turns up a `uca1400` collation it needs a rewrite
-pass — but none is expected.
+**And then the verify pass found one.** `u918436082_m_memories` — Piwigo —
+uses **`utf8mb3_uca1400_ai_ci`** across all 34 tables, and MySQL 8.0.46 rejects
+it outright: `ERROR 1273 (HY000) Unknown collation`. So the risk was real, just
+far narrower than "high" implied: **1 database out of 9, and the only one not
+created by WordPress.** Piwigo's schema was evidently created recently enough,
+under MariaDB 11.x, to pick up its new default; the WordPress schemas all
+predate that and carry `utf8mb4_unicode_520_ci`, which MySQL knows.
+
+This is exactly why the trial site was not sufficient on its own — skinosis.com
+was clean, and would have licensed a false conclusion about the other eight.
+
+**Resolved** by `scripts/sanitize-mariadb-dump.sh`, a restore-time filter
+mapping `*_uca1400_*` to the nearest collation MySQL has. Captured dumps stay
+byte-faithful to the source; the rewrite happens visibly at restore. All 9
+databases now restore cleanly into MySQL 8.0.46 — see §4d.
+
+**Still open, deliberately:** Piwigo is on `utf8mb3`, deprecated since MySQL 8.0
+and slated for removal. Converting it to `utf8mb4` changes index key lengths and
+can overflow a table's key limit, so it is a migration decision to take and test
+on purpose — not something a restore filter should do quietly.
 
 Source and destination are different database engines, and the source is
 several major versions ahead. MariaDB 11.x emits `uca1400` collations and
@@ -663,6 +679,61 @@ the local machine, are never written to a file, and never appear in output;
 `MYSQL_PWD` keeps the password out of the remote process list. `wp db query`,
 `wp db size` and `wp db tables` are unaffected — they go through PHP's mysqli,
 not a subprocess.
+
+## 4d. Backup run and verification — 2026-07-28 (COMPLETE)
+
+`/var/www/backups/hostinger/2026-07-28/` — **16 GB**, 14 sites, 9 databases.
+Hetzner sat at 56% disk when done.
+
+Every site file-verified at capture (source vs destination file count, refusing
+to write a manifest on mismatch), and every database restore-verified into
+MySQL 8.0.46.
+
+| Site | Files | Database | Tables | Restore |
+|---|---|---|---|---|
+| menamaps.com | 126,553 | `u918436082_menamaps` | 52 | OK |
+| memories.mardini.net | 22,192 | `u918436082_m_memories` | 34 | OK *(via sanitiser)* |
+| lebanese.tech | 15,507 | `u918436082_lebanesetech` | 12 | OK |
+| videotizer.com | 12,340 | `u918436082_videotizer` | 13 | OK |
+| hirement.com | 12,470 | `u918436082_hirement` | 12 | OK |
+| grand-emerald.com | 8,098 | `u918436082_grandemerald` | 14 | OK |
+| singlefunction.com | 6,069 | `u918436082_singlefunction` | 13 | OK |
+| nidaldirani.com | 5,862 | `u918436082_nidaldirani` | 12 | OK |
+| skinosis.com | 4,872 | `u918436082_skinosis` | 13 | OK |
+| sasf-ksa.com | 141 | — | — | — |
+| webmasterish.com | 348 | — | — | — |
+| lamarkazia.com | 6 | — | — | — |
+| nizonet.com | 2 | — | — | — |
+| mardini.net | 2 | — | — | — |
+| `~` root files | 4 | — | — | — |
+
+Re-run any time with `verify-hostinger-backup.sh 2026-07-28`.
+
+### Two bugs the run exposed
+
+Both produced *silent* wrong results, which is the kind worth recording.
+
+1. **`ssh` inside a `while read` loop ate the site list.** The first batch run
+   backed up menamaps.com, skipped the other 13, and exited 0 reporting
+   "failed: 0". Only the `ok: 2` count betrayed it. `ssh` reads stdin greedily
+   and consumed the remaining here-string lines. Fixed by feeding the list on
+   fd 3 and adding `ssh -n` where stdin is not needed.
+
+2. **`rsync --delete` protects excluded paths.** After `backups/` was excluded,
+   sites already synced kept their stale copy, and the count check failed with
+   *destination greater than source* — 4874 vs 4872 on skinosis.com. Plain
+   `--delete` will not remove something an `--exclude` now covers; that needs
+   `--delete-excluded`. Relevant any time an exclusion is added after a sync.
+
+### Still outstanding
+
+- **`shamsaldhaher.com` and `billing.shamsaldhaher.com` are not backed up** —
+  excluded pending the migrate/keep decision. They remain the only gap against
+  a literal reading of the 2026-07-31 commitment. Backing them up does not
+  require the decision.
+- **Not yet offsite.** The set lives only on Hetzner, i.e. on the production
+  box. The S3 push (Phase 0 step 7) is what makes it a backup rather than a
+  copy.
 
 ## 5. Proposed migration order
 
