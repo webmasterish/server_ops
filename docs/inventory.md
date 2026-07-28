@@ -49,7 +49,7 @@ Docroot pattern: `~/domains/<domain>/public_html`
 
 | Site | Disposition |
 |---|---|
-| `woo.lushlebanon.com` | **Delete from hPanel. Do not back up.** The store moved to Shopify; the copy has no value and was only kept as a reference. Its Hostinger backup has never completed successfully in past attempts, so trying again would burn deadline time for nothing. |
+| `woo.lushlebanon.com` | **Leave in place, exclude from the backup.** The store moved to Shopify, so the copy has no value, and its Hostinger backup has never completed successfully in past attempts. Deleting it changes nothing operationally, so it stays until the migration is finished — the owner may yet decide to push a copy to S3. Excluded from all rsync and dump runs meanwhile. |
 | `shamsaldhaher.com` | **Back up. Probably not migrating** — pending final call. |
 | `billing.shamsaldhaher.com` | **Back up. Probably not migrating** — pending final call. |
 | `menamaps.com` | **Back up now. Migrate later, from its own project** — see §1.6. |
@@ -454,6 +454,11 @@ unaffected; no transfer needed. Only ordinary domain-expiry hygiene applies
 
 ### B5 — MariaDB 11.8.8 → MySQL 8.0.46  *(high)*
 
+**To be clear about scope: this is not one site's problem.** MariaDB 11.8.8 is
+the database *server* for the entire Hostinger shared account. All 12 databases
+run on it — every WordPress site, the Laravel billing app and Piwigo alike.
+Hetzner runs MySQL 8.0.46. So **every dump crosses engines**, not just Piwigo's.
+
 Source and destination are different database engines, and the source is
 several major versions ahead. MariaDB 11.x emits `uca1400` collations and
 MariaDB-specific syntax in dumps that MySQL 8.0 will reject. Every dump needs
@@ -534,6 +539,70 @@ they are junk is easier with a copy in hand.
 
 ---
 
+## 4b. Backup method
+
+### Transfer path
+
+Hetzner reaches Hostinger directly on **port 65002** (verified:
+`SSH-2.0-OpenSSH_9.9`). Port 22 is not used — an early test against it reported
+"filtered" and was meaningless.
+
+Auth follows the pattern already established for the DigitalOcean migration:
+copy `~/.ssh/hostinger/dotaim/` from the local machine to Hetzner and add
+`Include hostinger/dotaim/config` to Hetzner's `~/.ssh/config`. The bundled
+config defines the `hostinger` alias with an absolute `IdentityFile` path under
+`/home/webmasterish`, which is identical on Hetzner, so it works unchanged and
+the CLAUDE.md "use the alias, never an inline host" rule keeps holding.
+
+Chosen over SSH agent forwarding for a concrete reason: **a forwarded agent dies
+with the session that carried it.** A multi-hour unattended rsync needs
+credentials that outlive any one login, so a key on the box is the right call
+here, not merely the familiar one.
+
+### Files: rsync the trees, do not tar on Hostinger
+
+The DigitalOcean migration used tar.gz per site and sql.bz2 per database, built
+on the source and then transferred. **Do not repeat that here.** Five reasons,
+in rough order of weight:
+
+1. **It writes nothing to Hostinger.** CLAUDE.md holds Hostinger read-only until
+   the migration is verified. Building ~17 GB of tarballs there breaks that, and
+   needs the free quota to hold them.
+2. **CloudLinux resource limits.** Hostinger enforces per-account CPU/IO limits
+   (LVE). Compressing 11 GB of menamaps JPEGs on a shared host invites
+   throttling or an outright kill partway through.
+3. **Compression is nearly worthless here** — §1.5 measured ~12% compressible.
+   Burning constrained shared CPU for that is a bad trade.
+4. **rsync resumes; tar does not.** A 11 GB archive that dies at 90% starts over.
+5. **The delta re-sync before cutover is nearly free** with rsync and expensive
+   with tar. Every site needs a final catch-up sync at go-live.
+
+So: `rsync` the directory trees straight to Hetzner, then **build the archives on
+Hetzner** from the synced trees for the S3 copy. Same artifacts as before, just
+produced on the machine that can afford the work.
+
+### Databases: stream, never stage on the source
+
+Pipe each dump over SSH and compress on arrival, so nothing is written to
+Hostinger's filesystem. `wp db export -` writes to stdout, which makes this
+clean for the 10 WordPress sites; the Laravel and Piwigo databases use
+`mysqldump` the same way.
+
+### Layout on Hetzner
+
+```
+/var/www/backups/hostinger/<yyyy-mm-dd>/
+├── sites/<domain>/          rsync'd trees -- the migration source
+├── db/<dbname>.sql.bz2      streamed dumps
+├── home/                    ~ root files (§1.6)
+├── MANIFEST.txt             sizes, file counts, per-site checksums
+└── archives/                built here, one at a time, uploaded to S3, deleted
+```
+
+Build archives one at a time rather than all at once — that keeps peak disk near
+~19 GB of trees plus one archive, well inside the 48 GB free, instead of the
+~36 GB the both-at-once case would need.
+
 ## 5. Proposed migration order
 
 The two deadline items — backups and DNS — are **not** the migration and
@@ -543,28 +612,31 @@ should not wait for it. Run them first and in parallel.
 
 Nothing here requires deciding anything about Hetzner's stack.
 
-1. **Delete `woo.lushlebanon.com` in hPanel** (owner). No backup. Removes 6.6 G
-   from the source before anything else runs.
-2. **Delete `/var/www/backups/do-dotaim`** on Hetzner (owner). Frees 1.3 G and
-   brings free space to ~48.3 G. Cleared — see §3.5.
-3. **Open a transfer path from Hetzner to Hostinger.** Server-to-server, so the
-   20.9 G never crosses the slow home link. Use SSH agent forwarding
-   (`ssh -A`) so no private key is ever stored on Hetzner.
-4. **Pull all 16 sites plus `~` root files** (§1.6) into
-   `/var/www/backups/hostinger/<yyyy-mm-dd>/`, biggest first (`menamaps.com`
-   11 G, `memories.mardini.net` 2.8 G, `lebanese.tech` and `videotizer.com`
-   1.7 G each). This is the long pole — start it early and let it run.
-5. **Dump the 12 databases** — wp-cli for the 10 WP sites (remembering
-   `SERVER_NAME=<domain>` and `--path=cms`, plus `--skip-themes --skip-plugins`
-   for lebanese.tech), artisan/mysqldump for `u918436082_billing`, mysqldump
-   for `u918436082_m_memories`.
-6. **Verify** — checksums on the archives, file counts against the source, and
-   a test import of each database into Hetzner's MySQL 8.0 under a throwaway
-   name. This doubles as the B5 MariaDB-compatibility test and tells us early
-   how much dump-sanitising is needed. "Verified backups" is the actual
-   commitment; an unverified copy does not count.
-7. **Push the archives to AWS S3** for a genuine offsite copy — a backup living
-   only on the production box is not a backup.
+1. ~~Delete `/var/www/backups/do-dotaim`~~ — **done 2026-07-28.** Free space on
+   Hetzner is now **48 G**.
+2. **Open the transfer path** — copy the `hostinger/dotaim` key bundle to
+   Hetzner and add the `Include` line (§4b). Everything then runs from Hetzner.
+3. **Single-site trial run — `skinosis.com`.** Do not start the bulk pull until
+   this is reviewed and approved. Rationale for the choice: 141 MB so it is
+   quick, but it exercises every feature that matters — the `cms/content`
+   layout, the `SERVER_NAME`-keyed `.config` loader, a `.config/api_keys.php`
+   file, WP 7.0.2, and a real MariaDB→MySQL import. And it is the dead client
+   project, so the stakes are nil.
+4. **Pull the remaining 15 sites plus `~` root files** (§1.6) into
+   `/var/www/backups/hostinger/<yyyy-mm-dd>/sites/`, biggest first
+   (`menamaps.com` 11 G, `memories.mardini.net` 2.8 G, `lebanese.tech` and
+   `videotizer.com` 1.7 G each). Excludes `woo.lushlebanon.com`. This is the
+   long pole — start it early and let it run unattended.
+5. **Stream the 12 database dumps** (§4b) — wp-cli for the 10 WP sites
+   (remembering `SERVER_NAME=<domain>` and `--path=cms`, plus
+   `--skip-themes --skip-plugins` for lebanese.tech), `mysqldump` for
+   `u918436082_billing` and `u918436082_m_memories`.
+6. **Verify** — per-site checksums and file counts against the source, plus a
+   test import of every database into Hetzner's MySQL 8.0 under a throwaway
+   name. This doubles as the B5 MariaDB-compatibility test. "Verified backups"
+   is the actual commitment; an unverified copy does not count.
+7. **Archive and push to AWS S3** — built on Hetzner, one at a time, deleted
+   after upload. A backup living only on the production box is not a backup.
 8. **Move the zones to Cloudflare** — `grand-emerald.com`, `nizonet.com`, and
    `shamsaldhaher.com` (pending Q2). Pre-stage every record, lower TTLs first,
    and **carry the existing Hostinger MX records across unchanged** (§2.3) —
