@@ -47,13 +47,23 @@ log() { printf '[%s] %s\n' "$(date +%H:%M:%S)" "$*"; }
 
 log "syncing files for ${DOMAIN}"
 
+# Hostinger's per-domain backups/ directories are its own managed stubs, not
+# usable archives -- skipped by decision, 2026-07-28.
+EXCLUDES=(--exclude='backups/')
+
 # No -z: section 1.5 measured the payload as ~88% already-compressed media, so
 # compression burns CPU for almost nothing.
-rsync -a --delete --stats \
+#
+# --delete matters on re-runs: it is what removes content dropped at the source
+# (or newly excluded here) instead of leaving it behind to rot in the backup.
+rsync -a --delete --stats "${EXCLUDES[@]}" \
   -e "ssh ${SSH_OPTS[*]}" \
   "${REMOTE}:domains/${DOMAIN}/" "${SITE_DIR}/"
 
-SRC_COUNT=$(ssh "${SSH_OPTS[@]}" "${REMOTE}" "find domains/${DOMAIN} -type f | wc -l")
+# The source count must apply the same exclusions, or the check below compares
+# unlike things and fails on every site that has a backups/ directory.
+SRC_COUNT=$(ssh "${SSH_OPTS[@]}" "${REMOTE}" \
+  "find domains/${DOMAIN} -type f -not -path '*/backups/*' | wc -l")
 DST_COUNT=$(find "${SITE_DIR}" -type f | wc -l)
 
 log "files: source=${SRC_COUNT} dest=${DST_COUNT}"
@@ -73,16 +83,24 @@ DB_FILE="(none)"
 if [[ "${WP_PATH}" != "--no-db" ]]; then
   log "resolving database name"
 
-  # The custom wp-config picks its config file by $_SERVER['SERVER_NAME'],
-  # which is empty under CLI -- without it the config falls through to a root
-  # branch and fails to connect. --skip-themes/--skip-plugins keeps a broken
-  # theme (lebanese.tech) from taking wp-cli down with it.
-  WP_CMD="cd domains/${DOMAIN}/public_html && SERVER_NAME=${DOMAIN} wp"
-  WP_ARGS="--path=${WP_PATH} --skip-themes --skip-plugins"
+  if [[ "${WP_PATH}" == "--piwigo" ]]; then
+    # Piwigo keeps its settings in local/config/database.inc.php as a $conf
+    # array -- no wp-cli involved.
+    DB_NAME=$(ssh "${SSH_OPTS[@]}" "${REMOTE}" \
+      "cd domains/${DOMAIN}/public_html && php -r '\$conf=array(); include \"local/config/database.inc.php\"; echo \$conf[\"db_base\"];'" \
+      | tr -d '[:space:]')
+  else
+    # The custom wp-config picks its config file by $_SERVER['SERVER_NAME'],
+    # which is empty under CLI -- without it the config falls through to a root
+    # branch and fails to connect. --skip-themes/--skip-plugins keeps a broken
+    # theme (lebanese.tech) from taking wp-cli down with it.
+    WP_CMD="cd domains/${DOMAIN}/public_html && SERVER_NAME=${DOMAIN} wp"
+    WP_ARGS="--path=${WP_PATH} --skip-themes --skip-plugins"
 
-  DB_NAME=$(ssh "${SSH_OPTS[@]}" "${REMOTE}" \
-    "${WP_CMD} db query 'SELECT DATABASE();' --skip-column-names ${WP_ARGS}" \
-    | tr -d '[:space:]')
+    DB_NAME=$(ssh "${SSH_OPTS[@]}" "${REMOTE}" \
+      "${WP_CMD} db query 'SELECT DATABASE();' --skip-column-names ${WP_ARGS}" \
+      | tr -d '[:space:]')
+  fi
 
   if [[ -z "${DB_NAME}" ]]; then
     log "FAIL: could not resolve database name"
@@ -106,15 +124,19 @@ if [[ "${WP_PATH}" != "--no-db" ]]; then
   #
   # pipefail matters: without it a failed dump still yields a valid-looking
   # (empty) bz2 and the script would report success.
+  # Each resolver prints a set of `export` statements for the remote shell to
+  # eval. Same contract, different source of truth.
+  if [[ "${WP_PATH}" == "--piwigo" ]]; then
+    CRED_EVAL="php -r '\$conf=array(); include \"local/config/database.inc.php\"; printf(\"export MYSQL_PWD=%s DBU=%s DBH=%s DBN=%s\", escapeshellarg(\$conf[\"db_password\"]), escapeshellarg(\$conf[\"db_user\"]), escapeshellarg(\$conf[\"db_host\"]), escapeshellarg(\$conf[\"db_base\"]));'"
+  else
+    CRED_EVAL="SERVER_NAME='${DOMAIN}' wp eval 'printf(\"export MYSQL_PWD=%s DBU=%s DBH=%s DBN=%s\", escapeshellarg(DB_PASSWORD), escapeshellarg(DB_USER), escapeshellarg(DB_HOST), escapeshellarg(DB_NAME));' --path='${WP_PATH}' --skip-themes --skip-plugins 2>/dev/null"
+  fi
+
   set -o pipefail
   ssh "${SSH_OPTS[@]}" "${REMOTE}" 'bash -s' <<REMOTE_SCRIPT | bzip2 -9 > "${DB_FILE}"
 set -euo pipefail
 cd "domains/${DOMAIN}/public_html"
-eval "\$(SERVER_NAME='${DOMAIN}' wp eval '
-printf("export MYSQL_PWD=%s DBU=%s DBH=%s DBN=%s",
-  escapeshellarg(DB_PASSWORD), escapeshellarg(DB_USER),
-  escapeshellarg(DB_HOST), escapeshellarg(DB_NAME));
-' --path='${WP_PATH}' --skip-themes --skip-plugins 2>/dev/null)"
+eval "\$(${CRED_EVAL})"
 mysqldump --single-transaction --quick --default-character-set=utf8mb4 \\
   --host="\$DBH" --user="\$DBU" "\$DBN"
 REMOTE_SCRIPT
