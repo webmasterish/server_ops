@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+#
+# Block commits that look like they carry live credentials.
+#
+# Scans ADDED lines only. The original version scanned the whole diff, which
+# meant a flagged line could not even be *removed* without --no-verify: the
+# deletion itself re-tripped the hook. Filtering to "^+" (minus the "+++"
+# file header) fixes that.
+#
+# The trailing [:=] in the pattern is deliberate -- it matches an assignment
+# (keyword, then a colon or equals, then a value) rather than every prose
+# mention of the word. Keep it. Without it this fires on documentation
+# constantly, and a hook that cries wolf gets overridden reflexively.
+
+if git diff --cached -U0 \
+  | grep "^+" \
+  | grep -v "^+++" \
+  | grep -nEi "(password|passwd|secret|api[_-]?key|token|BEGIN [A-Z ]*PRIVATE KEY)[\"']?[[:space:]]*[:=]"
+then
+  echo
+  echo "Possible credential in staged changes. Commit blocked."
+  echo
+  echo "If that is prose rather than a real value, reword it -- that is almost"
+  echo "always the right fix. Override only after reading the diff yourself:"
+  echo "  git commit --no-verify"
+  exit 1
+fi
