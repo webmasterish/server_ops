@@ -452,12 +452,38 @@ account is staying open and only the hosting plan is lapsing. Registration is
 unaffected; no transfer needed. Only ordinary domain-expiry hygiene applies
 (§2.4).
 
-### B5 — MariaDB 11.8.8 → MySQL 8.0.46  *(high)*
+### B5 — MariaDB 11.8.8 → MySQL 8.0.46  *(low — largely a non-issue)*
 
-**To be clear about scope: this is not one site's problem.** MariaDB 11.8.8 is
-the database *server* for the entire Hostinger shared account. All 12 databases
-run on it — every WordPress site, the Laravel billing app and Piwigo alike.
-Hetzner runs MySQL 8.0.46. So **every dump crosses engines**, not just Piwigo's.
+First, scope: MariaDB 11.8.8 is the database *server* for the entire Hostinger
+shared account. All 12 databases run on it — every WordPress site, the Laravel
+billing app and Piwigo alike. Hetzner runs MySQL 8.0.46, so **every dump
+crosses engines**, not just Piwigo's.
+
+**Earlier drafts of this document rated that "high" risk. That was overstated.**
+Two pieces of evidence, one prior and one measured:
+
+1. The owner has been pulling these dumps into a **local MySQL 8.4.10** almost
+   daily for development work, for a long time, with no issues. MySQL 8.4 is
+   *newer* and stricter than Hetzner's 8.0.46, so that experience transfers.
+2. The `skinosis.com` trial (§4c) imported into Hetzner's MySQL 8.0.46 cleanly:
+   13 tables, zero errors, and row counts matching the source exactly
+   (141 posts / 175 options / 464 postmeta).
+
+Why the theoretical concern did not materialise:
+
+- These databases use **`utf8mb4_unicode_520_ci`**, which MySQL 8.0.46 supports
+  (verified against `information_schema.COLLATIONS`). The problem collations are
+  MariaDB 11.x's `uca1400` family, which only appear on tables *created* under
+  MariaDB 11.x — these schemas predate that.
+- The MariaDB markers in the dump (`/*M!999999`, `/*M!100616`) are **conditional
+  comments**, designed to be ignored by non-MariaDB servers. MySQL skips them,
+  which is exactly the intent.
+- Every table is InnoDB. No storage-engine translation needed.
+
+**Residual, and it is small:** confirm the collation set per dump rather than
+assuming. One `grep -oE "COLLATE=[a-z0-9_]+"` per file, already part of the
+verify step. If any database turns up a `uca1400` collation it needs a rewrite
+pass — but none is expected.
 
 Source and destination are different database engines, and the source is
 several major versions ahead. MariaDB 11.x emits `uca1400` collations and
@@ -602,6 +628,41 @@ clean for the 10 WordPress sites; the Laravel and Piwigo databases use
 Build archives one at a time rather than all at once — that keeps peak disk near
 ~19 GB of trees plus one archive, well inside the 48 GB free, instead of the
 ~36 GB the both-at-once case would need.
+
+## 4c. Trial run — skinosis.com (2026-07-28)
+
+Completed end to end before any bulk work. Result: **the method works**, with
+one significant discovery.
+
+| Check | Result |
+|---|---|
+| Files synced | 4868 / 4868 — exact match |
+| Bytes | 112,188,403 |
+| Delta re-sync | 1 file, 3 KB, ~1 s — confirms cheap pre-cutover catch-up |
+| Database dump | 13 tables, 69 KB bz2 |
+| Import into MySQL 8.0.46 | clean, no errors |
+| Row counts source vs imported | 141 / 175 / 464 — exact match |
+
+### The discovery: `wp db export` does not work on Hostinger
+
+Hostinger disables PHP's shell-exec family — `passthru()`, and by extension
+`exec`/`system`/`proc_open`, are **undefined**. wp-cli's `db export` shells out
+to `mysqldump`, so it **fails silently**: no output, no stderr, exit 255, and an
+empty file where the dump should be.
+
+This is a nasty failure mode. Without the "does the dump contain any
+`CREATE TABLE`?" guard in `backup-hostinger-site.sh`, it produces a
+plausible-looking 14-byte `.sql.bz2` and reports success. **Any backup taken
+with `wp db export` on this host is empty.** Worth checking if one was ever
+relied on.
+
+Working approach, now in the script: let wp-cli load `wp-config.php` to resolve
+the credentials, hand them to the *remote shell*, and run `mysqldump` there —
+shell-exec restrictions do not apply to a real shell. Credentials never reach
+the local machine, are never written to a file, and never appear in output;
+`MYSQL_PWD` keeps the password out of the remote process list. `wp db query`,
+`wp db size` and `wp db tables` are unaffected — they go through PHP's mysqli,
+not a subprocess.
 
 ## 5. Proposed migration order
 
