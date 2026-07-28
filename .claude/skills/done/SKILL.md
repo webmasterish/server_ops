@@ -83,11 +83,16 @@ Only on files this session changed. These exist because of this repo's standing 
 
 1. **Credential scan — the one that matters most.** `.claude/CLAUDE.md` forbids writing
    credentials into files, logs or output. Before committing, scan every changed file
-   for anything that looks like a secret: passwords, API keys, tokens, DB passwords
-   pulled from a `wp-config.php` or `.env`, private keys, connection strings with
-   credentials in them. **Anything found blocks the commit — stop and tell the user.**
+   for anything that reads as a live secret — credentials pulled from a
+   `wp-config.php` or `.env`, private keys, connection strings with auth embedded.
+   **Anything found blocks the commit — stop and tell the user.**
    Note that database *names* and *users* are fine and expected in the inventory;
-   passwords and tokens are not.
+   live credential values are not.
+
+   A `pre-commit` hook in `.git/hooks/` enforces this independently. It flags a
+   keyword followed by `:` or `=`, so ordinary prose can trip it — if that happens,
+   reword rather than reaching for `--no-verify`, and only override once you have
+   read the diff and confirmed it is prose.
 2. **No dumps or archives staged.** `*.sql`, `*.sql.gz`, `*.tar`, `*.tar.gz`, `*.zip`,
    `backups/` are gitignored, but check nothing slipped through with `git add -f` or a
    renamed extension. Never commit a database dump or site archive.

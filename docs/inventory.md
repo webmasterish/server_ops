@@ -28,7 +28,7 @@ Docroot pattern: `~/domains/<domain>/public_html`
 | 2 | grand-emerald.com | WordPress | WP 7.0.2 | `u918436082_grandemerald` | 11 MB | 382 M | 200 |
 | 3 | hirement.com | WordPress | WP 6.9.4 | `u918436082_hirement` | 13 MB | 1.2 G | 200 |
 | 4 | lamarkazia.com | Static | plain HTML, `noindex` | — | — | 68 K | 200 |
-| 5 | lebanese.tech | WordPress | WP 6.9.5 — **fatal error** | `u918436082_lebanesetech` | 13 MB | 1.7 G | 200 |
+| 5 | lebanese.tech | WordPress | WP 6.9.5 — healthy (wp-cli caveat, B9) | `u918436082_lebanesetech` | 13 MB | 1.7 G | 200 |
 | 6 | mardini.net | Static | single placeholder page | — | — | 16 K | 200 |
 | 7 | memories.mardini.net | PHP app | **Piwigo 16.3.0** gallery | `u918436082_m_memories` | 4.8 MB | 2.8 G | 200 (login) |
 | 8 | menamaps.com | WordPress | WP 7.0.2 + **WooCommerce + Stripe** | `u918436082_menamaps` | 147 MB | **11 G** | 200 |
@@ -40,17 +40,31 @@ Docroot pattern: `~/domains/<domain>/public_html`
 | 14 | skinosis.com | WordPress | WP 7.0.2 | `u918436082_skinosis` | 1 MB | 141 M | 200 |
 | 15 | videotizer.com | WordPress | WP 7.0.2 | `u918436082_videotizer` | 9 MB | 1.7 G | 200 |
 | 16 | webmasterish.com | Static | HTML + orphaned `wordpress/wp-content` | — | — | 12 M | 200 |
-| 17 | ~~woo.lushlebanon.com~~ | WordPress | WP 7.0.2 + WooCommerce (prefix `wppd_`) | `u918436082_HcyjX` | 97 MB | 6.6 G | **NOT MIGRATING** |
+| 17 | ~~woo.lushlebanon.com~~ | WordPress | WP 7.0.2 + WooCommerce (prefix `wppd_`) | `u918436082_HcyjX` | 97 MB | 6.6 G | **DELETE — no backup** |
 
 **Totals as hosted:** 11 WordPress, 2 other PHP apps (Laravel, Piwigo),
 3 static, 1 parked. ~320 MB of database, 27.5 GB of files.
 
-**`woo.lushlebanon.com` is being deleted, not migrated** (decision 2026-07-28).
-It is excluded from every figure and every phase below. Still back it up before
-deletion — see §5 Phase 0.
+### Scope decisions (2026-07-28)
 
-**Scope to migrate:** 16 sites — 10 WordPress, 2 other PHP apps, 3 static,
-1 parked. **~223 MB of database across 12 databases, 20.9 GB of files.**
+| Site | Disposition |
+|---|---|
+| `woo.lushlebanon.com` | **Delete from hPanel. Do not back up.** The store moved to Shopify; the copy has no value and was only kept as a reference. Its Hostinger backup has never completed successfully in past attempts, so trying again would burn deadline time for nothing. |
+| `shamsaldhaher.com` | **Back up. Probably not migrating** — pending final call. |
+| `billing.shamsaldhaher.com` | **Back up. Probably not migrating** — pending final call. |
+| `menamaps.com` | **Back up now. Migrate later, from its own project** — see §1.6. |
+| everything else | Back up and migrate. |
+
+"Not migrating" still means "back up" — the deadline commitment is complete
+verified backups of everything on Hostinger. `woo.lushlebanon.com` is the sole
+exception, by explicit decision.
+
+**Backup scope (the 2026-07-31 commitment):** 16 sites, **20.9 GB of files**,
+**~223 MB across 12 databases**.
+
+**Migration scope:** ~19.4 GB once shamsaldhaher.com and billing are excluded —
+and only **~8.4 GB of it is near-term**, since menamaps.com (11 G) is deferred
+to its own project.
 
 ### 1.2 Non-standard WordPress layout
 
@@ -102,16 +116,41 @@ staying open. Revisit when the mail subscription nears expiry.
 
 MX records are the only usable proxy from here — see §2.3.
 
-### 1.5 Other account contents
+### 1.5 Payload composition — compression will not help much
+
+Measured across the 20.9 GB backup scope (woo.lushlebanon excluded):
+
+| Class | Size |
+|---|---|
+| Already-compressed media (jpg/png/gif/webp/mp4/pdf/zip/gz/woff) | **15.85 GB** |
+| Everything else (code, HTML, CSS, JS, SQL) | **2.19 GB** |
+
+Only ~12% of the payload is compressible. A `tar.gz` of the whole thing lands
+around **16-17 GB**, not the 8-10 GB one might assume. Plan space against the
+raw figure, not a hoped-for compression ratio.
+
+### 1.6 menamaps.com tooling in the account root
+
+There are loose files and scripts in `~` belonging to menamaps.com, outside any
+docroot — they will **not** be caught by a `~/domains` backup:
+
+- `~/mm-scripts/` — `batch-create.php`, `batch-golive.php`,
+  `canonicalize-city-terms.php` (modified 2026-07-26, actively used)
+- `~/menamaps_track1_desc_backup_20260630_213620.json` (84 KB)
+
+**Include `~` root files in the backup**, then leave them alone. menamaps.com
+migrates later from its own project, where the surrounding context lives.
+Do not try to reconstruct that context here.
+
+### 1.7 Other account contents
 
 - `~/.dbdumps/` — **empty**. No local database dumps exist.
 - `~/domains/*/backups/` — present on 10 domains but all appear to be
   Hostinger-managed stubs, not usable archives.
 - `~/error_log` (92 KB) plus per-domain `error_log` on grand-emerald,
   menamaps, nidaldirani, shamsaldhaher.
-- `~/.api_token` — a Hostinger API token. Not read. Could be used to query
-  the Hostinger API for the cron data SSH cannot reach — needs your go-ahead
-  first, since that means sending a credential to their API.
+- `~/.api_token` — a Hostinger API token. Not read, and **not needed**: it is
+  a general Hostinger API token, not cron-related.
 
 ---
 
@@ -240,6 +279,47 @@ Apache configs symlinked out of each site's own `config/` directory into
 Plus `000-default.conf`. Matomo's database is by far the largest thing on the
 box and is growing.
 
+### 3.3b Target vhost grouping (decided 2026-07-28)
+
+Migrated sites slot into the existing `/var/www/vhosts/<group>/` pattern under
+three groups:
+
+```
+/var/www/vhosts/
+├── mardini/
+│   └── mardini.net/
+│       ├── httpdocs/
+│       └── subs/
+│           └── memories.mardini.net/
+├── webmasterish/
+│   ├── singlefunction.com/
+│   └── webmasterish.com/
+└── dotaim/
+    ├── dotaim.com/                 (existing)
+    │   └── subs/analytics.dotaim.com/
+    ├── ayatalquran.com/            (existing)
+    ├── grand-emerald.com/
+    ├── hirement.com/
+    ├── lamarkazia.com/
+    ├── lebanese.tech/
+    ├── nidaldirani.com/
+    ├── nizonet.com/
+    ├── sasf-ksa.com/
+    ├── skinosis.com/
+    ├── videotizer.com/
+    └── menamaps.com/               (later, own project)
+```
+
+Note `memories.mardini.net` becomes a **sub** of `mardini.net` rather than a
+top-level vhost, matching how `analytics.dotaim.com` already sits under
+`dotaim.com`. Each site keeps its own `httpdocs/`, `logs/`, `config/` and
+(where relevant) `subs/`, with the Apache config symlinked out of `config/`
+into `sites-enabled` — the pattern already in use.
+
+Undecided pending the migrate/don't-migrate call: `shamsaldhaher.com` and
+`billing.shamsaldhaher.com` (would presumably be their own `shamsaldhaher`
+group if they land at all).
+
 ### 3.4 TLS
 
 certbot manages three certificates, all valid to **2026-09-24** (58 days):
@@ -248,8 +328,8 @@ certbot manages three certificates, all valid to **2026-09-24** (58 days):
 
 ### 3.5 Backups — FLAGGED
 
-- `/var/www/backups/do-dotaim/` — 1.3 G, covering `dotaim.com` and
-  `ayatalquran.com`. **Last written 2025-08-29 — roughly 11 months stale.**
+- `/var/www/backups/do-dotaim/` — 1.3 G, 7 files. **Cleared for deletion
+  2026-07-28** — see the assessment below.
 - **No backup cron job exists.** `crontab -l` is empty for both root and
   `webmasterish`; `/etc/cron.d` contains only certbot, e2scrub_all, php,
   sysstat.
@@ -258,6 +338,42 @@ certbot manages three certificates, all valid to **2026-09-24** (58 days):
 
 So there is no working file/database backup routine on the destination server,
 and nothing offsite beyond a 7-day provider snapshot window.
+
+#### `do-dotaim` deletion assessment
+
+Contents — 7 files, the DigitalOcean-era import set:
+
+```
+dotaim.com/2025-08-28/     dotaim.com_2025-08-28.tar.gz              466 MB
+                           dotaim_analytics_matomo_..._latest.sql     578 MB
+                           dotaim_analytics_matomo_....sql.bz2        174 MB
+                           dotaim_website_wp_....sql                  483 KB
+                           dotaim_website_wp_....sql.bz2               53 KB
+ayatalquran.com/2025-08-29/ ayatalquran.com_2025-08-29.tar.gz          43 MB
+                            ayatalquran_website_wp_....sql             31 MB
+```
+
+**Verdict: safe to delete.** Reasoning:
+
+- These are pre-migration snapshots of the DigitalOcean state. Both sites have
+  been live on Hetzner for ~11 months since, all returning HTTP 200 with real
+  content (`dotaim.com` 89 KB, `ayatalquran.com` 37 KB, `analytics` 189 KB).
+  Anything missing from the migration would have surfaced long ago.
+- The live databases exist and are healthy (§3.3).
+- Nothing on the box references this path — no cron, no scripts.
+
+Two honest caveats, neither blocking:
+
+1. This is the **only** copy of the pre-migration DigitalOcean state. Once gone,
+   rolling back to August 2025 is impossible. Given 11 months of successful
+   production use, that is an acceptable trade.
+2. It only frees **1.3 G**, which does not change the migration arithmetic (B2)
+   either way. Delete it for tidiness, not for space.
+
+Zero-risk alternative if there is any hesitation: delete only the uncompressed
+`.sql` files that already have a `.bz2` twin — `dotaim_analytics_matomo_..._latest.sql`
+(578 MB) and `dotaim_website_wp_....sql` (483 KB). That frees ~579 MB and loses
+nothing at all, since the bz2 holds identical data.
 
 ---
 
@@ -280,29 +396,51 @@ of source-side headroom for the rest of the work.
 
 ### B2 — Backup destination is tight but workable  *(medium — was critical)*
 
-Dropping `woo.lushlebanon.com` takes the payload from 27.5 G to **20.9 G**,
-which changes this from a hard blocker to a sequencing constraint.
+**Resolved 2026-07-28: Hetzner has enough room. Back up there.**
 
-Hetzner has **47 G free** (75 G total, 26 G used). Two scenarios:
+Dropping `woo.lushlebanon.com` takes the payload from 27.5 G to **20.9 G**.
+Deleting `/var/www/backups/do-dotaim` (§3.5) frees another 1.3 G, giving
+**48.3 G free**.
 
-| Plan | Added | Result |
+Revised arithmetic — note that compression barely helps (§1.5: only ~12% of the
+payload is compressible, so a full archive is ~16-17 G, not ~8 G):
+
+| Scenario | Added | Free after |
 |---|---|---|
-| Sites live on Hetzner, archive stored **elsewhere** | ~21 G | ~26 G free (65% used) — **viable** |
-| Archive staged **and** unpacked on Hetzner | ~42 G | ~5 G free (93% used) — **not viable** |
+| Archives only (~16-17 G) | 17 G | ~31 G — comfortable |
+| Extracted sites only (~19 G migrating) | 19 G | ~29 G — comfortable |
+| Archives **and** everything extracted at once | ~36 G | ~12 G — tight but survivable |
 
-So: the archive must not live on Hetzner. Put it on local `/media/data2` or
-object storage, and stream each site onto Hetzner as it migrates rather than
-landing the whole archive there first. With that constraint respected, no
-volume expansion is needed.
+So the answer to both questions is yes: enough for the archives, and enough for
+them extracted. The tight case only arises if every archive is kept alongside
+every extraction simultaneously — avoid it by extracting site-by-site and
+removing each archive once that site is verified.
 
-### B3 — Cron jobs cannot be read over SSH  *(critical)*
+**But a backup on the production box is not a backup.** Staging on Hetzner is
+the right call for speed (server-to-server, avoiding the slow home link), and
+then the archives should be pushed to DotAim's AWS S3 so a real offsite copy
+exists. The S3 upload runs from Hetzner's datacenter link, not from home.
 
-`crontab` is hPanel-only, so part of "complete verified backups" is **not**
-obtainable by the tooling in this repo — someone has to export the cron jobs
-from the Hostinger control panel by hand, or we authorise use of the account's
-API token. `~/mm-scripts/` (modified 2026-07-26) is evidence that live
-scheduled tasks exist. This is the one Phase 0 step that cannot be scripted or
-retried after the plan lapses.
+Local `/media/backups/from_remote_servers/hostinger/<yyyy-mm-dd>/` remains the
+fallback if S3 is not convenient, accepting the slower transfer.
+
+### B3 — Cron jobs cannot be read over SSH  *(medium — likely a non-issue)*
+
+`crontab` is hPanel-only. In current hPanel, cron is **per-website**:
+`hPanel → Websites → <site> → Advanced → Cron Jobs`. There is no account-wide
+list, so a complete check means opening that page for each site.
+
+The owner's recollection is that **no cron jobs exist** on this account, which
+is consistent with what the filesystem shows. Treat this as a quick
+confirmation rather than an export task — and it only needs doing for the
+handful of sites plausibly running one (menamaps.com above all, given
+`~/mm-scripts/`), not all 16.
+
+Worth knowing: **WordPress's own scheduled events are stored in the database**
+(`wp_options` → `cron`), so they travel with the dump automatically and need no
+separate export. Only real system cron entries would be lost.
+
+`~/.api_token` is a general Hostinger API token, not cron-related — not needed.
 
 Mailboxes are likewise hPanel-only, but are **no longer urgent** — see §2.3.
 They outlive the hosting plan.
@@ -358,13 +496,21 @@ matter much). Either install PHP 8.2 alongside 8.3 on Hetzner, or update
 `singlefunction.com` before moving it — the latter is probably cleaner now that
 `woo.lushlebanon.com`, the other 8.2 site, is out of scope.
 
-### B9 — lebanese.tech is broken  *(medium)*
+### B9 — lebanese.tech: wp-cli needs `--skip-themes`  *(low)*
 
-Fatal error in `content/themes/curated_directory/includes/plugins/webmasterish/webmasterish.php:1307`
-(`Uncaught TypeError: No resource supplied`). The site returns 200 publicly but
-wp-cli only works with `--skip-themes --skip-plugins`. Migrating it will carry
-the fault across; it needs fixing either before or after, but it should not be
-allowed to block the backup.
+**Correction (2026-07-28): the site is not broken.** An earlier draft of this
+document called it a fatal error; that was wrong. Verified: HTTP 200, 65 KB of
+real page, correct `<title>`, no error text in the body.
+
+What is true is narrower — under **wp-cli only**, the theme throws
+`Uncaught TypeError: No resource supplied` at
+`content/themes/curated_directory/includes/plugins/webmasterish/webmasterish.php:1307`.
+The code path evidently expects a web-request context that CLI does not
+provide. Web requests are unaffected.
+
+Practical impact: any wp-cli command against this site needs
+`--skip-themes --skip-plugins`. That is a one-flag workaround, not a defect to
+fix before migrating.
 
 ### B10 — Hetzner has no swap and limited RAM  *(medium)*
 
@@ -397,33 +543,38 @@ should not wait for it. Run them first and in parallel.
 
 Nothing here requires deciding anything about Hetzner's stack.
 
-1. **Export cron jobs from hPanel by hand.** Nothing else can enumerate them
-   (B3). Do this first; it is the only step that cannot be scripted or retried
-   after the plan lapses. Mailboxes are **not** needed now — they outlive the
-   plan (§2.3).
-2. **Back up `woo.lushlebanon.com` first, then delete it.** 6.6 G + 97 MB. It
-   is not migrating, but it must not be lost. Doing it first frees 6.6 G on the
-   source side and shrinks everything downstream.
-3. **Start the file pull** — the remaining 16 sites, ~20.9 G, biggest first
-   (`menamaps.com` 11 G, `memories.mardini.net` 2.8 G, `lebanese.tech` and
-   `videotizer.com` 1.7 G each). Archive destination must **not** be Hetzner
-   (B2). This runs for hours; kick it off early and let it work while other
-   steps proceed.
-4. **Dump the 12 databases** — wp-cli for the 10 WP sites (remembering
-   `SERVER_NAME=<domain>` and `--path=cms`), artisan/mysqldump for
-   `u918436082_billing`, mysqldump for `u918436082_m_memories`.
-5. **Verify** — checksums on the archives, and a test import of each database
-   into Hetzner's MySQL 8.0 under a throwaway name. This doubles as the B5
-   MariaDB-compatibility test and tells us early how much dump-sanitising is
-   needed. "Verified backups" is the actual commitment; an unverified copy does
-   not count.
-6. **Move the three zones to Cloudflare** — `shamsaldhaher.com`,
-   `grand-emerald.com`, `nizonet.com`. Pre-stage every record, lower TTLs
-   first, and **carry the existing Hostinger MX records across unchanged**
-   (§2.3) — moving the zone is safe, changing MX is not.
+1. **Delete `woo.lushlebanon.com` in hPanel** (owner). No backup. Removes 6.6 G
+   from the source before anything else runs.
+2. **Delete `/var/www/backups/do-dotaim`** on Hetzner (owner). Frees 1.3 G and
+   brings free space to ~48.3 G. Cleared — see §3.5.
+3. **Open a transfer path from Hetzner to Hostinger.** Server-to-server, so the
+   20.9 G never crosses the slow home link. Use SSH agent forwarding
+   (`ssh -A`) so no private key is ever stored on Hetzner.
+4. **Pull all 16 sites plus `~` root files** (§1.6) into
+   `/var/www/backups/hostinger/<yyyy-mm-dd>/`, biggest first (`menamaps.com`
+   11 G, `memories.mardini.net` 2.8 G, `lebanese.tech` and `videotizer.com`
+   1.7 G each). This is the long pole — start it early and let it run.
+5. **Dump the 12 databases** — wp-cli for the 10 WP sites (remembering
+   `SERVER_NAME=<domain>` and `--path=cms`, plus `--skip-themes --skip-plugins`
+   for lebanese.tech), artisan/mysqldump for `u918436082_billing`, mysqldump
+   for `u918436082_m_memories`.
+6. **Verify** — checksums on the archives, file counts against the source, and
+   a test import of each database into Hetzner's MySQL 8.0 under a throwaway
+   name. This doubles as the B5 MariaDB-compatibility test and tells us early
+   how much dump-sanitising is needed. "Verified backups" is the actual
+   commitment; an unverified copy does not count.
+7. **Push the archives to AWS S3** for a genuine offsite copy — a backup living
+   only on the production box is not a backup.
+8. **Move the zones to Cloudflare** — `grand-emerald.com`, `nizonet.com`, and
+   `shamsaldhaher.com` (pending Q2). Pre-stage every record, lower TTLs first,
+   and **carry the existing Hostinger MX records across unchanged** (§2.3) —
+   moving the zone is safe, changing MX is not.
+9. **Spot-check cron in hPanel** (owner) for menamaps.com and any site
+   plausibly running one (B3). Expected to be empty.
 
 No longer in Phase 0: mailbox IMAP pull and domain transfers, both deferred by
-the 2026-07-28 decision that the Hostinger account stays open.
+the 2026-07-28 decision that the Hostinger account stays open. Backing up
+`woo.lushlebanon.com` is also gone, by explicit decision.
 
 After Phase 0, the deadline is met and everything below can proceed calmly.
 
@@ -488,12 +639,32 @@ mistake costs nothing, before they touch anything transactional.
 
 ## 7. Open questions
 
-1. **Where should the ~21 GB backup live?** (B2) Local `/media/data2` or object
-   storage — Hetzner is ruled out by the space arithmetic.
-2. **May I use `~/.api_token`** to query the Hostinger API for the cron data
-   SSH cannot reach? That sends an account credential to Hostinger's API, so I
-   have not touched it. The alternative is a manual hPanel export.
+**Resolved 2026-07-28:**
+
+- *Backup destination* → **Hetzner**, after deleting `do-dotaim`. Space is
+  sufficient (B2). Push archives on to AWS S3 afterwards for a genuine offsite
+  copy.
+- *Hostinger API token* → not needed; it is not cron-related.
+- *`skinosis.com` has no MX* → ignore. Dead project, client's responsibility,
+  hosting kept as a favour.
+- *`sasf-ksa.com/wp/` and `webmasterish.com/wordpress/`* → confirmed dead.
+  Sweep both for media and other non-WordPress files first, keep anything
+  found, discard the rest.
+
+**Still open:**
+
+1. **Do `shamsaldhaher.com` and `billing.shamsaldhaher.com` migrate?**
+   Currently "probably not". Both get backed up regardless. Note the knock-on:
+   `shamsaldhaher.com` is one of the three zones on Hostinger nameservers, so
+   if it is not migrating, decide what it should point at — see Q2.
+2. **Does the `shamsaldhaher.com` zone still need moving to Cloudflare?**
+   It is on Hostinger's `dns-parking` nameservers. Those are tied to the domain
+   registration (which continues) rather than the hosting plan, so the zone may
+   keep resolving after the plan lapses — but it would resolve to a docroot
+   that no longer exists. Recommendation: move it anyway. It is cheap and
+   removes a dependency we would otherwise be guessing about.
 3. **mod_php or PHP-FPM** on Hetzner (B6)? Currently mod_php, so no per-site
-   isolation; CLAUDE.md still specifies one pool per site.
-4. **`skinosis.com` has no MX** — intentional?
-5. **`sasf-ksa.com/wp/` and `webmasterish.com/wordpress/`** — confirmed dead?
+   isolation; CLAUDE.md still specifies one pool per site. Deferred by
+   agreement — to discuss when provisioning work starts.
+4. **AWS S3 details** — which bucket/profile for the offsite copy, and are
+   credentials already available on Hetzner?
