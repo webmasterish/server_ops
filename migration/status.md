@@ -2,27 +2,20 @@
 
 Updated 2026-07-29. Hetzner is `91.99.146.221`. Hostinger is `82.25.96.229`.
 
-## Live on Hetzner
+## Live on Hetzner — all static sites done
 
 | Site | Group | Cert expires | Redirect | Hostinger copy |
 |---|---|---|---|---|
 | lamarkazia.com | `dotaim` | 2026-10-27 | 301 | still in place |
 | mardini.net | `mardini` | 2026-10-27 | 301 | still in place |
 | webmasterish.com | `webmasterish` | 2026-10-27 | 301 | still in place |
+| nizonet.com | `dotaim` | 2026-10-27 | 301 | parking page, discarded |
+| sasf-ksa.com | `dotaim` | 2026-10-27 | 301 | still in place |
 
-All three verified byte-identical to the Hostinger original before cutover,
-both apex and `www`.
+All verified byte-identical to the Hostinger original before cutover, both apex
+and `www` (except nizonet.com, whose content was rewritten by design).
 
-## Staged, waiting on DNS
-
-| Site | Group | Blocker |
-|---|---|---|
-| nizonet.com | `dotaim` | zone edit at Hostinger — see below |
-| sasf-ksa.com | `dotaim` | third-party controls DNS; A record change requested |
-
-Both serve correctly when resolution is forced at Hetzner. `enable-site-ssl.sh`
-refuses until the name actually resolves here, so there is no harm in trying
-early.
+**Next: videotizer.com — the first WordPress migration.**
 
 ## Do not delete from Hostinger yet
 
