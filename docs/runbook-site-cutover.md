@@ -213,3 +213,48 @@ migration is finished.
 The exception is a site that has taken writes on Hetzner since cutover — those
 writes are not on Hostinger. Rolling back then means exporting from Hetzner
 first. Another reason not to leave sites half-migrated for long.
+
+---
+
+## After cutover: Cloudflare-proxied sites
+
+A proxied site works the moment DNS moves, which hides a question worth
+answering: **how is Cloudflare talking to the origin?**
+
+If the site served HTTPS *before* a certificate existed on Hetzner — as
+videotizer.com did — the zone is on **Flexible**. Flexible means:
+
+```
+visitor  --HTTPS-->  Cloudflare  --PLAIN HTTP-->  Hetzner
+```
+
+The visitor sees a padlock, so nothing looks wrong. But the Cloudflare-to-origin
+leg crosses the public internet unencrypted, readable and modifiable in transit,
+including session cookies and anything posted to wp-admin. Flexible also causes
+redirect loops the moment the origin starts redirecting HTTP to HTTPS.
+
+Once `enable-site-ssl.sh --proxied` has issued a certificate, the origin serves
+valid TLS under SNI and the zone should be moved to **Full (strict)**:
+
+- **Full** — Cloudflare connects over HTTPS but accepts any certificate,
+  including self-signed. Encrypted, but does not prove it is talking to the
+  right server.
+- **Full (strict)** — Cloudflare connects over HTTPS *and* validates the
+  certificate. This is the correct setting once a real certificate exists.
+
+In the dashboard: pick the domain, then **SSL/TLS → Overview → Encryption mode
+→ Full (strict)**. It is per-zone, so it has to be set for each proxied domain.
+
+Verify the origin is ready before switching:
+
+```bash
+curl -sS -o /dev/null --resolve <domain>:443:91.99.146.221 \
+  -w 'origin https %{http_code} ssl_verify:%{ssl_verify_result}\n' https://<domain>/
+```
+
+`ssl_verify:0` means Full (strict) will work. Anything else means it will not,
+and switching would take the site down.
+
+Leave `--no-redirect` in place for proxied sites either way: Cloudflare handles
+the HTTP-to-HTTPS redirect at the edge, and an origin redirect underneath it is
+redundant at best.

@@ -110,6 +110,27 @@ else
 fi
 
 # ---------------------------------------------------------------------------
+# 3b. Rewrite absolute paths left over from Hostinger
+# ---------------------------------------------------------------------------
+#
+# Some plugins bake the filesystem path into wp-config.php or the database.
+# WP Super Cache is the one seen here: it writes WPCACHEHOME into wp-config,
+# then on every admin page load notices the path is wrong, tries to correct it,
+# and fails because wp-config is deliberately not writable by www-data --
+# surfacing as "Could not update wp-config.php! WPCACHEHOME must be set".
+#
+# This has to run on every resync, not once: step 2 re-copies wp-config.php
+# from the source and reinstates the old path each time.
+
+OLD_PATH="${SRC_DOCROOT_PREFIX:-/home/u918436082/domains}/${DOMAIN}/public_html"
+
+if grep -q "${OLD_PATH}" "${DOCROOT}/wp-config.php" 2>/dev/null; then
+  log "       rewriting stale source paths in wp-config.php"
+  cp "${DOCROOT}/wp-config.php" "${DOCROOT}/wp-config.php.bak-$(date +%F-%H%M%S)"
+  sed -i "s#${OLD_PATH}#${DOCROOT}#g" "${DOCROOT}/wp-config.php"
+fi
+
+# ---------------------------------------------------------------------------
 # 4. Rebuild the database
 # ---------------------------------------------------------------------------
 
@@ -128,6 +149,22 @@ log "step 4/5 -- rebuilding ${DBNAME} from $(basename "${DUMP}")"
                   CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_520_ci;"
 
 bzcat "${DUMP}" | "${HERE}/sanitize-mariadb-dump.sh" | "${MYSQL[@]}" "${DBNAME}"
+
+# Same stale paths, but inside the database -- and often inside PHP-serialized
+# arrays, where the string length is stored alongside the value. A sed would
+# change the text and leave the length wrong, quietly corrupting the option.
+# wp search-replace understands serialization and fixes both.
+if [[ "${WP_PATH}" != "--no-db" && "${WP_PATH}" != "--piwigo" ]]; then
+  hits=$(cd "${DOCROOT}" && SERVER_NAME="${DOMAIN}" wp search-replace \
+    "${OLD_PATH}" "${DOCROOT}" --all-tables --precise --dry-run \
+    --path="${WP_PATH}" --skip-themes --skip-plugins --format=count 2>/dev/null | tail -1 || echo 0)
+  if [[ "${hits:-0}" -gt 0 ]]; then
+    log "       rewriting ${hits} stale source path(s) in the database"
+    (cd "${DOCROOT}" && SERVER_NAME="${DOMAIN}" wp search-replace \
+      "${OLD_PATH}" "${DOCROOT}" --all-tables --precise \
+      --path="${WP_PATH}" --skip-themes --skip-plugins --quiet 2>/dev/null) || true
+  fi
+fi
 
 # ---------------------------------------------------------------------------
 # 5. Verify against the source
