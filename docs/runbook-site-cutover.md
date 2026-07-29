@@ -132,12 +132,26 @@ like.
 Change the A record to **91.99.146.221**. Leave `www` alone if it is a CNAME to
 the apex; it follows. **Do not touch MX.**
 
-#### Cloudflare zones already on Full (strict): certificate FIRST
+#### Cloudflare zones: certificate FIRST, on Full AND Full (strict)
 
-This took nidaldirani.com down. If the zone is on **Full (strict)** and the
-origin is switched before Hetzner holds a certificate for that hostname,
-Cloudflare cannot validate the origin and every request returns **526**. Not
-degraded — down.
+Switching the origin before Hetzner holds a certificate for the hostname fails
+in one of two ways, and **the milder-sounding setting has the worse failure**:
+
+| Zone mode | What happens | How obvious |
+|---|---|---|
+| Full (strict) | Cloudflare cannot validate the origin: **526** on every request | obvious — the site is visibly down |
+| **Full** | Cloudflare encrypts but does not validate, accepts whatever certificate is presented, and Apache answers unknown SNI with its default vhost | **silent — HTTP 200 serving a different site** |
+
+nidaldirani.com hit the 526. hirement.com hit the silent one and spent several
+minutes serving the **Matomo login page** under its own domain, with no error
+anywhere; it was caught only by reading the page title rather than the status
+code. The same class of failure has bitten this estate before on a previous
+server, where the fallback vhost was 961.io.
+
+A catch-all vhost now makes the second case fail loudly instead — see
+`scripts/install-catchall-vhost.sh`. Unknown SNI gets a bare 404 from a
+self-signed vhost rather than a real site. That is a safety net, **not** a
+reason to skip the ordering below.
 
 Either:
 

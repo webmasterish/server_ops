@@ -74,7 +74,12 @@ if [[ ${PROXIED} -eq 1 ]]; then
   # ACME challenge will reach us too, which is the thing we actually care about.
   PROBE_VALUE="origin-check-$(head -c 16 /dev/urandom | od -An -tx1 | tr -d ' \n')"
   PROBE_DIR="${DOCROOT}/.well-known/acme-challenge"
-  mkdir -p "${PROBE_DIR}"
+  # sudo, and re-chown: a manual probe run with sudo leaves this directory
+  # owned by root, after which this script cannot write its own probe and dies
+  # with "Permission denied" having done nothing.
+  sudo mkdir -p "${PROBE_DIR}"
+  sudo chown -R webmasterish:www-data "${DOCROOT}/.well-known"
+  sudo chmod -R 775 "${DOCROOT}/.well-known"
   printf '%s' "${PROBE_VALUE}" > "${PROBE_DIR}/${PROBE_VALUE}"
 
   log "verifying this server is the origin for ${DOMAIN}"
@@ -205,11 +210,19 @@ sudo systemctl reload apache2
 
 log "verifying https before adding the redirect"
 sleep 2
-code=$(curl -sS -o /dev/null -w '%{http_code}' "https://${DOMAIN}/" || echo 000)
-log "https://${DOMAIN}/ -> ${code}"
+
+# Check the ORIGIN directly, not the public URL. Through a proxy this test is
+# measuring the proxy: hirement.com returned 403 here purely because
+# Cloudflare bot-blocked a bare curl user-agent, so the script reported
+# failure on a cutover that had actually succeeded. What this step needs to
+# know is whether THIS server serves the site over TLS.
+MY_IP="${MY_IP:-$(curl -s -4 ifconfig.me)}"
+code=$(curl -sS -o /dev/null -w '%{http_code}' \
+  --resolve "${DOMAIN}:443:${MY_IP}" "https://${DOMAIN}/" || echo 000)
+log "origin https://${DOMAIN}/ -> ${code}"
 
 if [[ "${code}" != "200" ]]; then
-  echo "FAIL: HTTPS is not serving; leaving HTTP alone so the site stays up" >&2
+  echo "FAIL: origin is not serving HTTPS; leaving HTTP alone so the site stays up" >&2
   exit 1
 fi
 
