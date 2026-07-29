@@ -25,10 +25,13 @@
 	# Let the maintenance page itself through, or the rule loops.
 	RewriteCond %{REQUEST_URI} !^/maintenance\.html$
 
-	# Your IP still sees the real site. Remove these two lines for a hard freeze.
+	# Your IP still sees the real site. Remove this line for a hard freeze.
 	RewriteCond %{REMOTE_ADDR} !^ALLOW_IP$
 
-	RewriteRule ^ /maintenance.html [R=503,L]
+	# `-` means no substitution: set the status and let ErrorDocument below
+	# serve the body. Rewriting to /maintenance.html instead would return the
+	# page but discard the 503, which defeats the whole point.
+	RewriteRule ^ - [R=503,L]
 </IfModule>
 
 <IfModule mod_headers.c>

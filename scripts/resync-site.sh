@@ -79,6 +79,21 @@ rsync -a --delete --exclude='*.bak-*' --stats \
 
 sudo chown -R webmasterish:www-data "${DOCROOT}"
 
+# Strip the cutover maintenance freeze from the DESTINATION copy.
+#
+# The source is deliberately frozen during a cutover (503 + Retry-After, see
+# docs/runbook-site-cutover.md), which means its .htaccess carries the freeze
+# block -- and the sync above faithfully copies it here. Without this the new
+# site comes up serving 503 to everyone the moment DNS moves, which looks
+# exactly like a failed migration.
+#
+# Marker-delimited so the strip is exact rather than a guess at line numbers.
+if [[ -f "${DOCROOT}/.htaccess" ]] && grep -q 'MIGRATION-FREEZE-START' "${DOCROOT}/.htaccess"; then
+  log "       stripping maintenance freeze from destination .htaccess"
+  sed -i '/### MIGRATION-FREEZE-START/,/### MIGRATION-FREEZE-END/d' "${DOCROOT}/.htaccess"
+fi
+rm -f "${DOCROOT}/maintenance.html"
+
 # ---------------------------------------------------------------------------
 # 3. Re-apply the local DB naming
 # ---------------------------------------------------------------------------

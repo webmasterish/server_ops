@@ -47,8 +47,36 @@ and can still write. The freeze has to be at the source.
 
 **This means writing to Hostinger**, which `.claude/CLAUDE.md` otherwise holds
 read-only. It is a deliberate, minimal, reversible exception for the cutover
-itself — one file, prepended, removed afterwards. Get explicit agreement before
-the first one; do not treat this runbook as standing permission.
+itself. Get explicit agreement before the first one; do not treat this runbook
+as standing permission.
+
+Applying it, in `domains/<domain>/public_html/`:
+
+```bash
+# 1. upload maintenance.html (a plain holding page) and the freeze block
+# 2. back up the original, then prepend
+cp .htaccess .htaccess.bak-$(date +%F)
+cat block.txt .htaccess.bak-$(date +%F) > .htaccess && rm block.txt
+```
+
+Then confirm it took, including a deep URL and the login page — a freeze that
+only covers the homepage is not a freeze:
+
+```bash
+curl -sI https://<domain>/            # 503 + retry-after
+curl -so /dev/null -w '%{http_code}\n' https://<domain>/listings/
+curl -so /dev/null -w '%{http_code}\n' https://<domain>/cms/wp-login.php
+```
+
+The freeze blocks HTTP only. `rsync` and `mysqldump` run over SSH and are
+unaffected, which is exactly what the next step needs.
+
+**The freeze block must never reach Hetzner.** The sync copies `.htaccess`
+faithfully, so without care the new site comes up serving 503 to everyone the
+moment DNS moves — indistinguishable from a failed migration. `resync-site.sh`
+strips it, which is why the block carries `### MIGRATION-FREEZE-START` /
+`### MIGRATION-FREEZE-END` sentinels: the strip is exact rather than a guess at
+line numbers. If you ever apply a freeze by hand, keep those markers.
 
 ### 2. Final sync
 
