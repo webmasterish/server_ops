@@ -25,6 +25,18 @@ and `www` (except nizonet.com, whose content was rewritten by design).
 | grand-emerald.com | `dotaim` | `grandemerald_website_wp` | 2026-10-27 | zone still on Hostinger nameservers; MX stays on Hostinger |
 | hirement.com | `dotaim` | `hirement_website_wp` | 2026-10-27 | Cloudflare Full (strict); core+plugins updated post-migration |
 | lebanese.tech | `dotaim` | `lebanesetech_website_wp` | 2026-10-27 | **PHP 7.4** — first non-default version |
+| singlefunction.com | `webmasterish` | `singlefunction_website_wp` | 2026-10-27 | **PHP 7.4**, WP 6.4.8 |
+
+Verify the whole estate any time with `scripts/audit-sites.sh` — it asks each
+site which PHP actually serves it rather than trusting config, and exits
+non-zero on any finding.
+
+## Remaining
+
+| Site | PHP | Notes |
+|---|---|---|
+| memories.mardini.net | 8.3 | Piwigo, not WordPress; nests as a sub of mardini.net |
+| menamaps.com | 8.5 | migrated from its own project — see `docs/handover-menamaps-migration.md` |
 
 All WordPress sites run PHP 8.3 via per-site FPM pools. See `docs/runbook-fpm.md`.
 
