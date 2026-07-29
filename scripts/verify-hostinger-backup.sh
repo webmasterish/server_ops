@@ -2,7 +2,7 @@
 #
 # Verify a Hostinger backup set. RUN ON hetzner.
 #
-#   ./verify-hostinger-backup.sh [yyyy-mm-dd]
+#   ./verify-hostinger-backup.sh [set-name]
 #
 # "Verified backups" is the actual 2026-07-31 commitment, and an unverified
 # copy does not count. This checks the part that can silently be wrong: whether
@@ -26,8 +26,8 @@
 set -uo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-DATE="${1:-$(date +%F)}"
-DEST="${BACKUP_ROOT:-/var/www/backups/hostinger}/${DATE}"
+SET="${1:-synced}"
+DEST="${BACKUP_ROOT:-/var/www/backups/hostinger}/${SET}"
 MYSQL=(sudo mysql --defaults-file=/etc/mysql/debian.cnf)
 
 [[ -d "${DEST}/db" ]] || { echo "no such backup set: ${DEST}"; exit 1; }

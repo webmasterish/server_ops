@@ -22,10 +22,10 @@
 
 set -uo pipefail
 
-DATE="${BACKUP_DATE:-$(date +%F)}"
+SET="${BACKUP_SET:-synced}"
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ONE="${HERE}/backup-hostinger-site.sh"
-DEST="${BACKUP_ROOT:-/var/www/backups/hostinger}/${DATE}"
+DEST="${BACKUP_ROOT:-/var/www/backups/hostinger}/${SET}"
 LOG="${DEST}/run.log"
 
 # domain <TAB> db-mode   (a wp subpath, --piwigo, or --no-db)
@@ -51,7 +51,7 @@ mkdir -p "${DEST}"
 exec > >(tee -a "${LOG}") 2>&1
 
 echo "=============================================================="
-echo "Hostinger backup run -- ${DATE}"
+echo "Hostinger backup run -- ${SET}"
 echo "started $(date -Is)"
 echo "=============================================================="
 
@@ -67,7 +67,7 @@ while IFS=$'\t' read -r domain mode <&3; do
   echo "-------------------------------------------------------------"
   echo ">>> ${domain} (${mode})"
   echo "-------------------------------------------------------------"
-  if BACKUP_DATE="${DATE}" "${ONE}" "${domain}" "${mode}"; then
+  if BACKUP_SET="${SET}" "${ONE}" "${domain}" "${mode}"; then
     OK+=("${domain}")
   else
     echo "*** FAILED: ${domain}"

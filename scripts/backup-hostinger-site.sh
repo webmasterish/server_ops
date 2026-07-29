@@ -11,7 +11,7 @@
 #   ./backup-hostinger-site.sh woo.example.com .     # WP at docroot
 #   ./backup-hostinger-site.sh mardini.net --no-db   # static, no database
 #
-# Writes to /var/www/backups/hostinger/<date>/ :
+# Writes to /var/www/backups/hostinger/<set>/ (default set: "synced") :
 #   sites/<domain>/         rsync'd tree
 #   db/<dbname>.sql.bz2     streamed dump
 #   manifest/<domain>.txt   counts, sizes, checksum
@@ -30,8 +30,8 @@ DOMAIN="${1:?usage: $0 <domain> [wp-subpath|--no-db]}"
 WP_PATH="${2:-cms}"
 
 REMOTE="${REMOTE_ALIAS:-hostinger}"
-DATE="${BACKUP_DATE:-$(date +%F)}"
-DEST="${BACKUP_ROOT:-/var/www/backups/hostinger}/${DATE}"
+SET="${BACKUP_SET:-synced}"
+DEST="${BACKUP_ROOT:-/var/www/backups/hostinger}/${SET}"
 SSH_OPTS=(-o BatchMode=yes)
 
 SITE_DIR="${DEST}/sites/${DOMAIN}"
