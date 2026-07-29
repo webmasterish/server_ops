@@ -23,6 +23,8 @@ and `www` (except nizonet.com, whose content was rewritten by design).
 | nidaldirani.com | `dotaim` | `nidaldirani_website_wp` | 2026-10-27 | behind Cloudflare; MX stays on Hostinger |
 | skinosis.com | `dotaim` | `skinosis_skinosis_com_wp` | 2026-10-27 | direct DNS, no MX; first site built on the FPM stack |
 | grand-emerald.com | `dotaim` | `grandemerald_website_wp` | 2026-10-27 | zone still on Hostinger nameservers; MX stays on Hostinger |
+| hirement.com | `dotaim` | `hirement_website_wp` | 2026-10-27 | Cloudflare Full (strict); core+plugins updated post-migration |
+| lebanese.tech | `dotaim` | `lebanesetech_website_wp` | 2026-10-27 | **PHP 7.4** — first non-default version |
 
 All WordPress sites run PHP 8.3 via per-site FPM pools. See `docs/runbook-fpm.md`.
 

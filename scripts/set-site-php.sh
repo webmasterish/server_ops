@@ -148,14 +148,36 @@ done
 # Apply
 # ---------------------------------------------------------------------------
 
-log "restarting php${VER}-fpm"
-sudo systemctl restart "php${VER}-fpm"
+# reload, not restart. FPM re-reads pool.d/ on SIGUSR2, so a reload is enough
+# to pick up a new pool, and it does not drop in-flight requests.
+#
+# restart is also actively dangerous in a loop: systemd rate-limits service
+# starts, and running this across nine sites tripped
+# "Start request repeated too quickly / start-limit-hit". php8.3-fpm went to
+# failed, its sockets vanished, and every 8.3 site returned 503 at once.
+log "reloading php${VER}-fpm"
+if ! sudo systemctl reload "php${VER}-fpm" 2>/dev/null; then
+  log "reload failed, falling back to restart"
+  sudo systemctl reset-failed "php${VER}-fpm" 2>/dev/null || true
+  sudo systemctl restart "php${VER}-fpm"
+fi
 
 if ! sudo systemctl is-active --quiet "php${VER}-fpm"; then
-  echo "FAIL: php${VER}-fpm did not come back" >&2
-  sudo systemctl status "php${VER}-fpm" --no-pager | tail -20
-  exit 1
+  echo "FAIL: php${VER}-fpm is not running" >&2
+  sudo systemctl reset-failed "php${VER}-fpm" 2>/dev/null || true
+  sudo systemctl start "php${VER}-fpm" || true
+  sudo systemctl is-active --quiet "php${VER}-fpm" \
+    || { sudo systemctl status "php${VER}-fpm" --no-pager | tail -20; exit 1; }
+  log "recovered"
 fi
+
+# The pool's socket must actually exist, or Apache returns 503 with a
+# perfectly healthy-looking service.
+for _ in 1 2 3 4 5; do
+  [[ -S "${SOCK}" ]] && break
+  sleep 1
+done
+[[ -S "${SOCK}" ]] || { echo "FAIL: ${SOCK} was never created" >&2; exit 1; }
 
 log "testing apache config"
 if ! sudo apache2ctl configtest 2>&1 | grep -q 'Syntax OK'; then

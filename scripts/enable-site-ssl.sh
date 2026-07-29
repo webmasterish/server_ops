@@ -192,6 +192,40 @@ ${ALIAS_LINE}
 </IfModule>
 EOF
 
+# ---------------------------------------------------------------------------
+# Carry the PHP-FPM handler over from the HTTP vhost
+# ---------------------------------------------------------------------------
+#
+# vhost-ssl.conf is rewritten from the template above, which means any handler
+# block set by set-site-php.sh is destroyed every time this runs. On a site
+# using the default PHP version nothing appears to break, because the global
+# fallback in conf-available/php-fpm-default.conf happens to point at the same
+# pool -- so the bug hides.
+#
+# It does not hide on a site pinned to another version. lebanese.tech runs 7.4;
+# with the handler gone, HTTPS fell through to the 8.3 fallback and the theme
+# died with "Uncaught TypeError: No resource supplied" -- HTTP 200, HTTPS 500,
+# on the same site at the same moment.
+#
+# So: copy the handler out of vhost.conf, which set-site-php.sh always writes.
+
+if [[ -f "${CONF}/vhost.conf" ]] && grep -q 'PHP-HANDLER-START' "${CONF}/vhost.conf"; then
+  log "carrying PHP handler across to the SSL vhost"
+  python3 - "${CONF}/vhost.conf" "${CONF}/vhost-ssl.conf" <<'PYEDIT'
+import re, sys
+src, dst = sys.argv[1], sys.argv[2]
+m = re.search(r"[ \t]*### PHP-HANDLER-START.*?### PHP-HANDLER-END\n",
+              open(src).read(), flags=re.S)
+if not m:
+    sys.exit(0)
+block = m.group(0)
+s = open(dst).read()
+s = re.sub(r"[ \t]*### PHP-HANDLER-START.*?### PHP-HANDLER-END\n", "", s, flags=re.S)
+s = s.replace("\t</VirtualHost>", block + "\t</VirtualHost>", 1)
+open(dst, "w").write(s)
+PYEDIT
+fi
+
 LINK="/etc/apache2/sites-enabled/${DOMAIN}-ssl.conf"
 if [[ ! -L "${LINK}" ]]; then
   log "linking ${LINK}"

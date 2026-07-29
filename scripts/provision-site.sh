@@ -98,6 +98,19 @@ fi
 # HTTP vhost
 # ---------------------------------------------------------------------------
 
+# Preserve the PHP-FPM handler across the rewrite below.
+#
+# This file is regenerated from the template every run, which silently destroys
+# the block set-site-php.sh wrote. On a site using the default PHP version the
+# damage is invisible, because the global fallback points at the same pool. On
+# lebanese.tech, pinned to 7.4, it meant HTTP fell through to the 8.3 fallback
+# and the theme fatalled -- while HTTPS, whose vhost still had the handler,
+# worked fine. Same site, same moment, two different PHP versions.
+EXISTING_HANDLER=""
+if [[ -f "${CONF}/vhost.conf" ]] && grep -q 'PHP-HANDLER-START' "${CONF}/vhost.conf"; then
+  EXISTING_HANDLER=$(sed -n '/### PHP-HANDLER-START/,/### PHP-HANDLER-END/p' "${CONF}/vhost.conf")
+fi
+
 log "writing ${CONF}/vhost.conf"
 
 SERVER_ALIAS_LINE=""
@@ -158,6 +171,19 @@ ${SERVER_ALIAS_LINE}
 ${REDIRECT_BLOCK}
 </VirtualHost>
 EOF
+
+if [[ -n "${EXISTING_HANDLER}" ]]; then
+  log "restoring PHP handler"
+  python3 - "${CONF}/vhost.conf" <<PYEDIT
+import sys
+path = sys.argv[1]
+block = """${EXISTING_HANDLER}
+"""
+s = open(path).read()
+s = s.replace("</VirtualHost>", block + "</VirtualHost>", 1)
+open(path, "w").write(s)
+PYEDIT
+fi
 
 # ---------------------------------------------------------------------------
 # Enable
