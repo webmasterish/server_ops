@@ -178,7 +178,9 @@ for conf in "${VHOSTS}"/*/*/config "${VHOSTS}"/*/*/subs/*/config; do
     [[ "${hs}" == "200" ]] || note "${domain}: origin HTTPS returned ${hs}"
   else
     # No certificate yet, so HTTPS legitimately lands on the catch-all.
-    [[ "${hp}" =~ ^(200|301)$ ]] || note "${domain}: origin HTTP returned ${hp}"
+    # 302 is fine too: Piwigo redirects / to identification.php for a private
+    # gallery, which is correct behaviour, not a fault.
+    [[ "${hp}" =~ ^(200|301|302|303|307)$ ]] || note "${domain}: origin HTTP returned ${hp}"
   fi
 
   # --- source disclosure ---------------------------------------------------

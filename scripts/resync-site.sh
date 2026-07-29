@@ -26,8 +26,21 @@ set -euo pipefail
 GROUP="${1:?usage: $0 <group> <domain> <db-name> [wp-path] [--sub <parent>]}"
 DOMAIN="${2:?usage: $0 <group> <domain> <db-name> [wp-path] [--sub <parent>]}"
 DBNAME="${3:?usage: $0 <group> <domain> <db-name> [wp-path] [--sub <parent>]}"
-WP_PATH="${4:-cms}"
-shift 3; [[ $# -gt 0 && "$1" != --* ]] && shift || true
+shift 3
+
+# The 4th positional is the wp-path, and two of its legal values start with
+# "--" (--piwigo, --no-db). Treating everything "--"-prefixed as an option made
+# `resync-site.sh ... --piwigo --sub x` fail with "unknown option: --piwigo"
+# while still having read it into WP_PATH -- so the value was right and the
+# parse was wrong.
+WP_PATH="cms"
+if [[ $# -gt 0 ]]; then
+  case "$1" in
+    --piwigo|--no-db) WP_PATH="$1"; shift ;;
+    --*)              : ;;              # a real option; leave it for the loop
+    *)                WP_PATH="$1"; shift ;;
+  esac
+fi
 
 PARENT=""
 while [[ $# -gt 0 ]]; do
@@ -162,7 +175,19 @@ fi
 SRC_DB=$(awk '/^database:/ {print $2}' "${BACKUP}/manifest/${DOMAIN}.txt" 2>/dev/null || true)
 
 log "step 3/5 -- repointing config at ${DBNAME}"
-if [[ -z "${SRC_DB}" || "${SRC_DB}" == "(none)" ]]; then
+
+# Piwigo has no wp-config and no .config directory -- its settings live in
+# local/config/database.inc.php as a $conf array, so the WordPress repointer
+# cannot touch it. Different file, same contract.
+if [[ "${WP_PATH}" == "--piwigo" ]]; then
+  PW_CONF="${DOCROOT}/local/config/database.inc.php"
+  if [[ -f "${PW_CONF}" ]]; then
+    log "       $(basename "${PW_CONF}") (piwigo)"
+    php "${HERE}/set-piwigo-db.php" "${PW_CONF}" "${DBNAME}" | sed 's/^/         /'
+  else
+    log "       WARNING: ${PW_CONF} not found -- the site will not connect"
+  fi
+elif [[ -z "${SRC_DB}" || "${SRC_DB}" == "(none)" ]]; then
   log "       no source database recorded, skipping"
 else
   mapfile -t CONFIG_FILES < <(grep -rl "${SRC_DB}" "${DOCROOT}/.config/" 2>/dev/null || true)
