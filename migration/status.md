@@ -21,6 +21,14 @@ and `www` (except nizonet.com, whose content was rewritten by design).
 |---|---|---|---|---|
 | videotizer.com | `dotaim` | `videotizer_website_wp` | 2026-10-27 | behind Cloudflare, `--no-redirect` |
 | nidaldirani.com | `dotaim` | `nidaldirani_website_wp` | 2026-10-27 | behind Cloudflare; MX stays on Hostinger |
+| skinosis.com | `dotaim` | `skinosis_skinosis_com_wp` | 2026-10-27 | direct DNS, no MX; first site built on the FPM stack |
+
+All WordPress sites run PHP 8.3 via per-site FPM pools. See `docs/runbook-fpm.md`.
+
+**Note on database names:** they do not all follow `<project>_website_wp`.
+skinosis.com is `skinosis_skinosis_com_wp`, and its local layout is
+`httpdocs/skinosis.com/wp/` rather than `httpdocs/website/wp/`. Check the local
+config per site rather than extrapolating the convention.
 
 videotizer.com was cut over using the full procedure in
 `docs/runbook-site-cutover.md`: frozen at source, resynced, verified, then DNS.
