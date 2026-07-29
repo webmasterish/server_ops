@@ -841,6 +841,28 @@ mistake costs nothing, before they touch anything transactional.
   not being renewed. Domains and mailboxes are separate subscriptions and keep
   working until they expire on their own. Neither is a 2026-07-31 item.
 
+## 6b. Security items found on Hetzner (2026-07-29)
+
+### Matomo API token in an Apache vhost — ROTATE
+
+`analytics.dotaim.com`'s `vhost-ssl.conf` carries a live Matomo API bearer token
+inline in a `RewriteRule` that maps `/mcp-proxy`. Two problems:
+
+1. It is a secret in a plaintext Apache config, readable by anything that
+   inspects vhosts — which is routine work.
+2. It was printed into a session transcript on 2026-07-29 while inspecting that
+   vhost's DocumentRoot. **Treat it as disclosed and rotate it.**
+
+Better homes for it: a Matomo-side config value, or an Apache `SetEnvIf` sourced
+from a root-only file outside the vhost.
+
+### All FPM pools share the www-data identity
+
+Verified, not assumed: `www-data` can read every site's database credentials,
+so a compromise in any one site exposes all of them. On Hostinger each site had
+its own user; that isolation was lost in the move. `open_basedir` per pool is in
+place as the cheap half. Per-site users are the fix — see `docs/runbook-fpm.md`.
+
 ## 7. Open questions
 
 **Resolved 2026-07-28:**

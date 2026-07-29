@@ -60,7 +60,10 @@ cat block.txt .htaccess.bak-$(date +%F) > .htaccess && rm block.txt
 ```
 
 Then confirm it took, including a deep URL and the login page — a freeze that
-only covers the homepage is not a freeze:
+only covers the homepage is not a freeze. **Check twice, a few seconds apart:**
+LiteSpeed serves cached pages for a moment after the `.htaccess` write, so the
+first check can show 200 on a freeze that is actually working. Both
+lebanese.tech and singlefunction.com looked unfrozen on the first pass.
 
 ```bash
 curl -sI https://<domain>/            # 503 + retry-after
@@ -190,6 +193,29 @@ made. Resync first and step 4 is a real gate with a free rollback behind it.
 The cost is that the maintenance page stays up for the duration of the resync
 instead of just the propagation. On videotizer.com the resync takes about 90
 seconds.
+
+### 5b. If the guard says DNS has not propagated — check WHOSE resolver
+
+`enable-site-ssl.sh` runs on Hetzner and uses **Hetzner's** resolver. That is
+the only view that matters, and it can lag every other view by a full TTL.
+
+This cost time twice. On skinosis.com the local machine's resolver was stale
+while the world had the new record; on singlefunction.com **Hetzner's**
+systemd-resolved kept re-caching the old address with a fresh 600s TTL while
+both GoDaddy nameservers and every public resolver had the new one.
+
+```bash
+# what Hetzner sees -- the view that decides
+ssh webmasterish@hetzner-dotaim 'dig +short <domain> A'
+# authoritative, bypassing all caching
+dig +short @ns47.domaincontrol.com <domain> A
+```
+
+If Hetzner disagrees with authoritative, flush rather than wait:
+
+```bash
+ssh webmasterish@hetzner-dotaim 'sudo resolvectl flush-caches'
+```
 
 ### 6. Wait, then confirm it is actually being served from here
 
