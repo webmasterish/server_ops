@@ -121,6 +121,14 @@ if [[ ${REDIRECT} -eq 1 ]] && sudo test -f "/etc/letsencrypt/live/${DOMAIN}/full
   REDIRECT_BLOCK="
 	# Redirect all traffic to https.
 	RewriteEngine on
+
+	# ...except the ACME challenge path, which must stay reachable over plain
+	# HTTP. Let's Encrypt follows the redirect to HTTPS, and if the name being
+	# validated is not yet a ServerName/ServerAlias on the SSL vhost -- exactly
+	# the case when ADDING www to an existing certificate -- Apache serves some
+	# other vhost and the challenge 404s. Excluding the path breaks that
+	# circularity permanently, and costs nothing.
+	RewriteCond %{REQUEST_URI} !^/\.well-known/acme-challenge/
 ${REDIRECT_COND}
 	RewriteRule ^ https://%{SERVER_NAME}%{REQUEST_URI} [END,QSA,R=permanent]"
 fi

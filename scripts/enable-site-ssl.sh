@@ -127,11 +127,19 @@ fi
 # ---------------------------------------------------------------------------
 
 log "requesting certificate"
+
+# --expand matters when the name list has GROWN since the last run. That
+# happens routinely here: if www points somewhere else at cutover time the
+# guard above correctly excludes it, and the certificate is issued for the apex
+# alone. Once www is repointed and this is re-run, --keep-until-expiring on its
+# own decides the existing certificate is still valid and keeps it -- so www is
+# never added, silently, and the vhost ends up with no ServerAlias either.
+# --expand tells certbot to reissue when the requested names differ.
 sudo certbot certonly --webroot -w "${DOCROOT}" \
   "${NAMES[@]}" \
   --cert-name "${DOMAIN}" \
   --non-interactive --agree-tos --email accounts@dotaim.com \
-  --keep-until-expiring
+  --expand --keep-until-expiring
 
 LIVE="/etc/letsencrypt/live/${DOMAIN}"
 sudo test -f "${LIVE}/fullchain.pem" || { echo "no certificate at ${LIVE}" >&2; exit 1; }
