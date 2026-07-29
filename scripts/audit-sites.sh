@@ -175,7 +175,10 @@ for conf in "${VHOSTS}"/*/*/config "${VHOSTS}"/*/*/subs/*/config; do
     -w '%{http_code}' "http://${domain}/" 2>/dev/null)
   printf '  origin        http:%s https:%s\n' "${hp}" "${hs}"
   if [[ ${HAS_TLS} -eq 1 ]]; then
-    [[ "${hs}" == "200" ]] || note "${domain}: origin HTTPS returned ${hs}"
+    # 2xx or 3xx. A redirect is a legitimate answer -- memories.mardini.net is
+    # a private Piwigo gallery that 302s to its login page. What matters is
+    # ruling out 4xx/5xx: a broken vhost, missing handler, or dead pool.
+    [[ "${hs}" =~ ^[23][0-9][0-9]$ ]] || note "${domain}: origin HTTPS returned ${hs}"
   else
     # No certificate yet, so HTTPS legitimately lands on the catch-all.
     # 302 is fine too: Piwigo redirects / to identification.php for a private

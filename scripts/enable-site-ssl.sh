@@ -255,8 +255,12 @@ code=$(curl -sS -o /dev/null -w '%{http_code}' \
   --resolve "${DOMAIN}:443:${MY_IP}" "https://${DOMAIN}/" || echo 000)
 log "origin https://${DOMAIN}/ -> ${code}"
 
-if [[ "${code}" != "200" ]]; then
-  echo "FAIL: origin is not serving HTTPS; leaving HTTP alone so the site stays up" >&2
+# 2xx OR 3xx. Demanding exactly 200 rejected a perfectly healthy site:
+# memories.mardini.net is a private Piwigo gallery that redirects / to
+# identification.php, so 302 is its correct answer. What this check needs to
+# rule out is 4xx/5xx -- a broken vhost, a missing handler, a dead pool.
+if [[ ! "${code}" =~ ^[23][0-9][0-9]$ ]]; then
+  echo "FAIL: origin HTTPS returned ${code}; leaving HTTP alone so the site stays up" >&2
   exit 1
 fi
 

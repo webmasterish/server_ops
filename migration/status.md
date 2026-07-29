@@ -31,12 +31,41 @@ Verify the whole estate any time with `scripts/audit-sites.sh` — it asks each
 site which PHP actually serves it rather than trusting config, and exits
 non-zero on any finding.
 
+| memories.mardini.net | `mardini` (sub) | `mardini_memories_website_piwigo` | 2026-10-27 | **Piwigo**, not WordPress; 2.7 GB of photos |
+
 ## Remaining
 
 | Site | PHP | Notes |
 |---|---|---|
-| memories.mardini.net | 8.3 | Piwigo, not WordPress; nests as a sub of mardini.net |
 | menamaps.com | 8.5 | migrated from its own project — see `docs/handover-menamaps-migration.md` |
+
+**Everything migratable from this repo is done — 14 of 15 sites.**
+
+## memories.mardini.net: photos return 403 unless logged in
+
+That is correct, not a fault. Its `.htaccess` carries a deliberate rule:
+
+```
+RewriteCond %{HTTP_COOKIE} !pwg_id
+RewriteRule ^(upload|_data)/.*\.(jpg|jpeg|png|webp|avif|gif|mp4|pdf)$ - [F,L]
+```
+
+Direct photo access is denied without a Piwigo session cookie — privacy
+protection for a family gallery. Verified the rule carried across byte-identical
+to the source, and that it keys on the cookie: 403 without, 200 with.
+
+## Still open (not blockers)
+
+- **Backups are Hetzner-only.** The S3 push has not happened, so there is no
+  offsite copy. This is the largest outstanding risk.
+- **Three zones still on Hostinger nameservers:** grand-emerald.com,
+  nizonet.com, shamsaldhaher.com. The sites work; the zones have not moved.
+- **shamsaldhaher.com and billing.shamsaldhaher.com are not backed up**, by
+  earlier decision pending the migrate-or-not call.
+- **All FPM pools run as www-data**, so any compromised site can still read
+  every other site's database credentials. See `docs/runbook-fpm.md`.
+- **Hostinger freezes remain in place** on every migrated site, deliberately.
+  Rolling any of them back means reverting DNS *and* lifting the freeze.
 
 All WordPress sites run PHP 8.3 via per-site FPM pools. See `docs/runbook-fpm.md`.
 
