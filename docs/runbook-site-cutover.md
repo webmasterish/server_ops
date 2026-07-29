@@ -28,11 +28,27 @@ happens at cutover, not at provisioning.**
 
 ## Cutover
 
-### 1. Pick a quiet window
+### 1. Freeze writes at the source
 
-The gap between the final sync and DNS propagation is a window where writes to
-the old site are lost. For low-traffic sites this is minutes and usually
-nothing. For anything taking orders or comments, see "Sites that take writes".
+Not "pick a quiet window" — actually stop writes. A quiet window is a hope; a
+freeze is a guarantee. Until the source can no longer accept a write, there is
+a period where a comment, order or edit lands in a database that is about to be
+thrown away.
+
+Put the Hostinger site into maintenance: `templates/maintenance.htaccess`,
+prepended to the site's existing `public_html/.htaccess`. It returns **503 with
+Retry-After**, not 200 and not a redirect — a 200 saying "we're down" tells
+search engines that *is* the page now, which is how a listings site gets
+deindexed.
+
+**A maintenance page only on Hetzner does not work here.** Hostinger keeps
+serving until DNS moves, and during propagation some visitors still reach it
+and can still write. The freeze has to be at the source.
+
+**This means writing to Hostinger**, which `.claude/CLAUDE.md` otherwise holds
+read-only. It is a deliberate, minimal, reversible exception for the cutover
+itself — one file, prepended, removed afterwards. Get explicit agreement before
+the first one; do not treat this runbook as standing permission.
 
 ### 2. Final sync
 
@@ -88,6 +104,25 @@ like.
 Change the A record to **91.99.146.221**. Leave `www` alone if it is a CNAME to
 the apex; it follows. **Do not touch MX.**
 
+#### Why DNS goes here, after the resync, not before it
+
+The tempting order is freeze, switch DNS, then resync. It gets the same
+no-lost-writes guarantee, since the freeze is what provides that. But it makes
+every visitor who lands on Hetzner during propagation see either the *stale*
+site (resync not finished) or a *broken* one (database dropped mid-import).
+Stale is the worse of the two: it looks fine, so nobody reports it.
+
+Resyncing first means a visitor only ever sees one of two honest states — a
+503 maintenance page on Hostinger, or the correct current site on Hetzner.
+
+It also preserves step 4. Switch DNS first and you have committed before
+verifying; the check becomes a formality you perform on a decision already
+made. Resync first and step 4 is a real gate with a free rollback behind it.
+
+The cost is that the maintenance page stays up for the duration of the resync
+instead of just the propagation. On videotizer.com the resync takes about 90
+seconds.
+
 ### 6. Wait, then confirm it is actually being served from here
 
 ```bash
@@ -111,34 +146,41 @@ sites, which redirect at the edge already.
 Do not delete anything. While the old copy exists, rollback is one A record.
 See `migration/status.md` for the conditions that have to hold first.
 
+**Leave the maintenance freeze in place** once DNS has moved. The site is no
+longer reachable by name, so the freeze costs nothing, and it stops anyone
+reaching the old copy by IP or stale cache and writing to a database nobody is
+watching any more.
+
 ---
 
 ## Sites that take writes
 
-`menamaps.com` (WooCommerce + Stripe) and anything with active comments or
-form submissions need more than a quiet window, because an order placed
-between the final sync and propagation lands in a database that is about to be
-abandoned.
+`menamaps.com` (WooCommerce + Stripe) is the hard case: an order placed in the
+gap lands in a database about to be abandoned, and unlike a comment it is not
+something anyone can re-enter from memory.
 
-Options, in increasing order of effort:
+The freeze in step 1 already solves this — a 503 means no order can be taken.
+What remains is choosing how long the shop is allowed to be closed, and:
 
-1. **Accept the gap.** Fine for a site whose writes are cheap to lose or
-   easy to re-enter. Not fine for orders.
-2. **Maintenance mode at the source** during steps 2 to 6. Stops writes
-   entirely. Visitors see a holding page for the duration — typically minutes.
-3. **Re-sync after propagation.** Sync once, switch DNS, then sync only the
-   tables that took writes once traffic has fully moved. Fiddly and
-   table-specific; only worth it where downtime is unacceptable.
+- repoint Stripe webhooks to the new host
+- test checkout end to end before lifting the freeze
+- check for orders placed shortly before the freeze that are mid-flow
 
-For menamaps.com specifically, also: repoint Stripe webhooks, and test checkout
-end to end before considering it done.
+The alternative to a freeze — cut over hot and re-sync order tables afterwards
+— is table-specific, fiddly, and gets auto-increment collisions wrong in ways
+that are painful to unpick. Only worth it if the shop genuinely cannot close
+for a few minutes.
 
 ---
 
 ## Rollback
 
-Change the A record back to `82.25.96.229`. That is the whole procedure, and it
-is why the Hostinger copy stays until the migration is finished.
+1. Change the A record back to `82.25.96.229`.
+2. **Lift the maintenance freeze on Hostinger**, or you have rolled back to a
+   503. Easy to forget precisely because step 8 says to leave it.
+
+That is the whole procedure, and it is why the Hostinger copy stays until the
+migration is finished.
 
 The exception is a site that has taken writes on Hetzner since cutover — those
 writes are not on Hostinger. Rolling back then means exporting from Hetzner

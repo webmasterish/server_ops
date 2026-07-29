@@ -1,0 +1,40 @@
+# Maintenance freeze for a Hostinger site during cutover.
+#
+# PREPEND this to the site's existing public_html/.htaccess, keeping everything
+# already there below it. Remove it to lift the freeze.
+#
+# Purpose is to stop WRITES at the source, so nothing can change between the
+# final resync and DNS propagation. A maintenance page only on Hetzner does not
+# achieve this: Hostinger keeps serving until DNS moves, and during propagation
+# some visitors still reach it and can still post.
+#
+# 503 + Retry-After is deliberate, and not cosmetic:
+#   - 200 with "we're down" text tells search engines the real page now says
+#     that. On a listings site, that is how you get deindexed.
+#   - A 302 to a holding page has the same problem plus it caches badly.
+#   - 503 with Retry-After is the documented "temporarily unavailable, come
+#     back" signal. Crawlers retain the old page and retry.
+#
+# ALLOW_IP lets you keep testing the source while the public sees maintenance.
+# Replace with your own address, or drop the two RewriteCond lines to freeze it
+# for everyone including yourself.
+
+<IfModule mod_rewrite.c>
+	RewriteEngine On
+
+	# Let the maintenance page itself through, or the rule loops.
+	RewriteCond %{REQUEST_URI} !^/maintenance\.html$
+
+	# Your IP still sees the real site. Remove these two lines for a hard freeze.
+	RewriteCond %{REMOTE_ADDR} !^ALLOW_IP$
+
+	RewriteRule ^ /maintenance.html [R=503,L]
+</IfModule>
+
+<IfModule mod_headers.c>
+	# 900s is a hint, not a promise. Set it to roughly how long you expect the
+	# cutover to take.
+	Header always set Retry-After "900" "expr=%{REQUEST_STATUS} == 503"
+</IfModule>
+
+ErrorDocument 503 /maintenance.html
