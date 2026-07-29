@@ -15,7 +15,20 @@ Updated 2026-07-29. Hetzner is `91.99.146.221`. Hostinger is `82.25.96.229`.
 All verified byte-identical to the Hostinger original before cutover, both apex
 and `www` (except nizonet.com, whose content was rewritten by design).
 
-**Next: videotizer.com — the first WordPress migration.**
+### WordPress
+
+| Site | Group | Database | Cert expires | Notes |
+|---|---|---|---|---|
+| videotizer.com | `dotaim` | `videotizer_website_wp` | 2026-10-27 | behind Cloudflare, `--no-redirect` |
+
+videotizer.com was cut over using the full procedure in
+`docs/runbook-site-cutover.md`: frozen at source, resynced, verified, then DNS.
+Post/option counts and newest timestamp matched the frozen source exactly.
+
+**The Hostinger copy is still frozen (503) and should stay that way** — see
+rollback in the runbook, which requires lifting it.
+
+**Next: the remaining eight WordPress sites.**
 
 ## Do not delete from Hostinger yet
 

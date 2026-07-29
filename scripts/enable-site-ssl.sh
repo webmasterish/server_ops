@@ -2,7 +2,11 @@
 #
 # Obtain a certificate and enable the HTTPS vhost for a site. RUN ON hetzner.
 #
-#   ./enable-site-ssl.sh <group> <domain> [--sub <parent>] [--no-www] [--no-redirect]
+#   ./enable-site-ssl.sh <group> <domain> [--sub <parent>] [--no-www] [--no-redirect] [--proxied]
+#
+# --proxied: the domain sits behind Cloudflare, so its A record points at the
+# proxy and never at this server. Origin is proven with a token round-trip
+# through the public hostname instead of an IP comparison.
 #
 # Run this ONLY after DNS for the domain already points at this server.
 # certbot's HTTP-01 challenge is answered by this machine, so if the name still
@@ -26,11 +30,13 @@ shift 2
 PARENT=""
 WANT_WWW=1
 REDIRECT=1
+PROXIED=0
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --sub)         PARENT="${2:?--sub needs a parent domain}"; shift 2 ;;
     --no-www)      WANT_WWW=0; shift ;;
     --no-redirect) REDIRECT=0; shift ;;
+    --proxied)     PROXIED=1; shift ;;
     *) echo "unknown option: $1" >&2; exit 1 ;;
   esac
 done
@@ -60,7 +66,35 @@ RESOLVED=$(dig +short A "${DOMAIN}" | tail -1)
 
 log "this server: ${MY_IP}   ${DOMAIN} resolves to: ${RESOLVED:-<nothing>}"
 
-if [[ "${RESOLVED}" != "${MY_IP}" ]]; then
+if [[ ${PROXIED} -eq 1 ]]; then
+  # Behind Cloudflare the A record resolves to Cloudflare, never to this box,
+  # so comparing IPs can only ever fail. Prove origin the honest way instead:
+  # put a probe value in the docroot, fetch it through the public hostname, and see
+  # whether it comes back. That tests the whole path -- if it round-trips, the
+  # ACME challenge will reach us too, which is the thing we actually care about.
+  PROBE_VALUE="origin-check-$(head -c 16 /dev/urandom | od -An -tx1 | tr -d ' \n')"
+  PROBE_DIR="${DOCROOT}/.well-known/acme-challenge"
+  mkdir -p "${PROBE_DIR}"
+  printf '%s' "${PROBE_VALUE}" > "${PROBE_DIR}/${PROBE_VALUE}"
+
+  log "verifying this server is the origin for ${DOMAIN}"
+  GOT=$(curl -sS -m 20 "http://${DOMAIN}/.well-known/acme-challenge/${PROBE_VALUE}" 2>/dev/null || true)
+  rm -f "${PROBE_DIR}/${PROBE_VALUE}"
+
+  if [[ "${GOT}" != "${PROBE_VALUE}" ]]; then
+    cat >&2 <<MSG
+
+REFUSING: ${DOMAIN} does not reach this server.
+
+A probe value written into this docroot was not returned when fetched over the
+public hostname, so the ACME challenge would not reach us either. Check that
+the proxy's origin points here and that it is not serving a cached page.
+MSG
+    exit 1
+  fi
+  log "origin confirmed"
+
+elif [[ "${RESOLVED}" != "${MY_IP}" ]]; then
   cat >&2 <<MSG
 
 REFUSING: ${DOMAIN} does not resolve to this server yet.
@@ -68,6 +102,9 @@ REFUSING: ${DOMAIN} does not resolve to this server yet.
 
 Point the A record here first and wait for the TTL to lapse. Running certbot
 now would fail validation and burn one of 5 hourly attempts for this hostname.
+
+If this domain is behind Cloudflare, the A record resolves to Cloudflare by
+design and never to this server -- re-run with --proxied.
 MSG
   exit 1
 fi
@@ -75,7 +112,9 @@ fi
 NAMES=(-d "${DOMAIN}")
 if [[ ${WANT_WWW} -eq 1 ]]; then
   WWW_RESOLVED=$(dig +short A "www.${DOMAIN}" | tail -1)
-  if [[ "${WWW_RESOLVED}" == "${MY_IP}" ]]; then
+  # Proxied: both names resolve to the proxy, so a match against MY_IP is
+  # impossible. Include www as long as it resolves at all.
+  if [[ ${PROXIED} -eq 1 && -n "${WWW_RESOLVED}" ]] || [[ "${WWW_RESOLVED}" == "${MY_IP}" ]]; then
     NAMES+=(-d "www.${DOMAIN}")
     log "including www.${DOMAIN}"
   else
