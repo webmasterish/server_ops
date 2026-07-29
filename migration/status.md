@@ -20,6 +20,7 @@ and `www` (except nizonet.com, whose content was rewritten by design).
 | Site | Group | Database | Cert expires | Notes |
 |---|---|---|---|---|
 | videotizer.com | `dotaim` | `videotizer_website_wp` | 2026-10-27 | behind Cloudflare, `--no-redirect` |
+| nidaldirani.com | `dotaim` | `nidaldirani_website_wp` | 2026-10-27 | behind Cloudflare; MX stays on Hostinger |
 
 videotizer.com was cut over using the full procedure in
 `docs/runbook-site-cutover.md`: frozen at source, resynced, verified, then DNS.

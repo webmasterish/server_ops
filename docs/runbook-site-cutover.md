@@ -132,6 +132,32 @@ like.
 Change the A record to **91.99.146.221**. Leave `www` alone if it is a CNAME to
 the apex; it follows. **Do not touch MX.**
 
+#### Cloudflare zones already on Full (strict): certificate FIRST
+
+This took nidaldirani.com down. If the zone is on **Full (strict)** and the
+origin is switched before Hetzner holds a certificate for that hostname,
+Cloudflare cannot validate the origin and every request returns **526**. Not
+degraded — down.
+
+Either:
+
+- leave the zone on **Flexible** through the cutover, issue the certificate
+  (step 7), then move it to Full (strict); or
+- **grey-cloud** the record (DNS-only), issue the certificate, then re-proxy.
+
+If you hit it anyway it is recoverable, because Cloudflare still proxies plain
+HTTP to the origin over HTTP even in strict mode — so `enable-site-ssl.sh
+--proxied` completes over HTTP-01 and the 526 clears as soon as Apache reloads.
+Confirm with a probe before assuming:
+
+```bash
+# on hetzner
+mkdir -p <docroot>/.well-known/acme-challenge
+echo PROBE-OK > <docroot>/.well-known/acme-challenge/probe-test
+# from anywhere
+curl -s http://<domain>/.well-known/acme-challenge/probe-test   # expect PROBE-OK
+```
+
 #### Why DNS goes here, after the resync, not before it
 
 The tempting order is freeze, switch DNS, then resync. It gets the same
