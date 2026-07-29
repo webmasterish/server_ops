@@ -36,10 +36,12 @@ shift 2
 
 PARENT=""
 CONTENT=""
+REDIRECT=1
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --sub)     PARENT="${2:?--sub needs a parent domain}"; shift 2 ;;
-    --content) CONTENT="${2:?--content needs a source path}"; shift 2 ;;
+    --sub)         PARENT="${2:?--sub needs a parent domain}"; shift 2 ;;
+    --content)     CONTENT="${2:?--content needs a source path}"; shift 2 ;;
+    --no-redirect) REDIRECT=0; shift ;;
     *) echo "unknown option: $1" >&2; exit 1 ;;
   esac
 done
@@ -94,6 +96,28 @@ log "writing ${CONF}/vhost.conf"
 SERVER_ALIAS_LINE=""
 [[ -n "${ALIASES}" ]] && SERVER_ALIAS_LINE="	ServerAlias ${ALIASES}"
 
+# HTTPS redirect is the default, but it is only safe to write once a
+# certificate exists -- redirecting to an HTTPS vhost that is not there yet
+# takes the site off the air, and on a first provision the cert cannot exist
+# because certbot needs this HTTP vhost to answer its challenge. So: skip it
+# now, and enable-site-ssl.sh rewrites this file with the redirect once the
+# cert is in place. Re-running provision after that keeps it.
+#
+# Opt out with --no-redirect for sites fronted by Cloudflare, which does the
+# redirect at the edge -- that is why dotaim.com has it commented out.
+REDIRECT_BLOCK=""
+if [[ ${REDIRECT} -eq 1 ]] && sudo test -f "/etc/letsencrypt/live/${DOMAIN}/fullchain.pem"; then
+  log "certificate present -- including HTTPS redirect"
+  REDIRECT_COND="	RewriteCond %{SERVER_NAME} =${DOMAIN}"
+  [[ -n "${ALIASES}" ]] && REDIRECT_COND="	RewriteCond %{SERVER_NAME} =${DOMAIN} [OR]
+	RewriteCond %{SERVER_NAME} =www.${DOMAIN}"
+  REDIRECT_BLOCK="
+	# Redirect all traffic to https.
+	RewriteEngine on
+${REDIRECT_COND}
+	RewriteRule ^ https://%{SERVER_NAME}%{REQUEST_URI} [END,QSA,R=permanent]"
+fi
+
 cat > "${CONF}/vhost.conf" <<EOF
 <VirtualHost *:80>
 	ServerName ${DOMAIN}
@@ -116,6 +140,7 @@ ${SERVER_ALIAS_LINE}
 	LogLevel warn
 	ErrorLog ${LOGS}/error.log
 	CustomLog ${LOGS}/access.log combined
+${REDIRECT_BLOCK}
 </VirtualHost>
 EOF
 

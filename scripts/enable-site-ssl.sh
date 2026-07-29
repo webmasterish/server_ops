@@ -2,7 +2,7 @@
 #
 # Obtain a certificate and enable the HTTPS vhost for a site. RUN ON hetzner.
 #
-#   ./enable-site-ssl.sh <group> <domain> [--sub <parent>] [--no-www]
+#   ./enable-site-ssl.sh <group> <domain> [--sub <parent>] [--no-www] [--no-redirect]
 #
 # Run this ONLY after DNS for the domain already points at this server.
 # certbot's HTTP-01 challenge is answered by this machine, so if the name still
@@ -19,16 +19,18 @@
 
 set -euo pipefail
 
-GROUP="${1:?usage: $0 <group> <domain> [--sub <parent>] [--no-www]}"
-DOMAIN="${2:?usage: $0 <group> <domain> [--sub <parent>] [--no-www]}"
+GROUP="${1:?usage: $0 <group> <domain> [--sub <parent>] [--no-www] [--no-redirect]}"
+DOMAIN="${2:?usage: $0 <group> <domain> [--sub <parent>] [--no-www] [--no-redirect]}"
 shift 2
 
 PARENT=""
 WANT_WWW=1
+REDIRECT=1
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --sub)    PARENT="${2:?--sub needs a parent domain}"; shift 2 ;;
-    --no-www) WANT_WWW=0; shift ;;
+    --sub)         PARENT="${2:?--sub needs a parent domain}"; shift 2 ;;
+    --no-www)      WANT_WWW=0; shift ;;
+    --no-redirect) REDIRECT=0; shift ;;
     *) echo "unknown option: $1" >&2; exit 1 ;;
   esac
 done
@@ -154,14 +156,35 @@ fi
 log "reloading apache"
 sudo systemctl reload apache2
 
-log "verifying"
+log "verifying https before adding the redirect"
 sleep 2
 code=$(curl -sS -o /dev/null -w '%{http_code}' "https://${DOMAIN}/" || echo 000)
 log "https://${DOMAIN}/ -> ${code}"
 
+if [[ "${code}" != "200" ]]; then
+  echo "FAIL: HTTPS is not serving; leaving HTTP alone so the site stays up" >&2
+  exit 1
+fi
+
+# ---------------------------------------------------------------------------
+# HTTP -> HTTPS redirect
+# ---------------------------------------------------------------------------
+#
+# Only now, and only after HTTPS is confirmed working above. Pointing the HTTP
+# vhost at an HTTPS vhost that is broken would take the site off the air
+# entirely rather than merely leaving it unencrypted.
+
+if [[ ${REDIRECT} -eq 1 ]]; then
+  log "enabling HTTP -> HTTPS redirect"
+  "$(dirname "${BASH_SOURCE[0]}")/provision-site.sh" "${GROUP}" "${DOMAIN}" \
+    ${PARENT:+--sub "${PARENT}"} >/dev/null
+
+  http_code=$(curl -sS -o /dev/null -w '%{http_code}' "http://${DOMAIN}/" || echo 000)
+  log "http://${DOMAIN}/ -> ${http_code} (expect 301)"
+else
+  log "redirect skipped (--no-redirect)"
+fi
+
 echo
 sudo certbot certificates --cert-name "${DOMAIN}" 2>/dev/null \
   | grep -E 'Certificate Name|Domains|Expiry' || true
-echo
-echo "NOTE: HTTP-to-HTTPS redirect is NOT enabled. dotaim.com has it commented"
-echo "out deliberately (Cloudflare handles it there). Decide per site."
