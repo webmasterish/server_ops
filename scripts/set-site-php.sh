@@ -96,6 +96,11 @@ listen.mode = 0660
 ${PM_BLOCK}
 pm.max_requests = 500
 
+; umask 002 so files the site creates are group-writable. Without it PHP writes
+; 644 root-of-its-own files that the maintenance user cannot overwrite, and the
+; next resync fails with "mkstemp ... Permission denied" mid-run.
+php_admin_value[umask] = 0002
+
 ; Each site gets its own error log, so a fatal is attributable to a site
 ; rather than lost in a shared file.
 php_admin_value[error_log] = ${BASE}/logs/php-error.log

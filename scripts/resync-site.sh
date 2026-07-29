@@ -78,7 +78,28 @@ log "step 2/5 -- syncing files into ${DOCROOT}"
 # the web server; here Apache runs as www-data, so the group needs write or
 # WordPress cannot create content/upgrade/<plugin> and every plugin update
 # fails with "Could not create directory".
-rsync -a --delete --exclude='*.bak-*' --chmod=D775,F664 --stats \
+# Page caches are excluded, and must be.
+#
+# They are regenerated on demand, so copying Hostinger's is pointless. Worse,
+# --delete tries to remove the ones generated HERE -- which the FPM pool
+# created as www-data, so rsync (running as webmasterish) fails with
+# "Permission denied", exits 23, and under `set -e` the whole resync aborts
+# part-way: on singlefunction.com that left the maintenance freeze in place and
+# the database never rebuilt.
+CACHE_EXCLUDES=(
+  --exclude='content/cache/'
+  --exclude='wp-content/cache/'
+  --exclude='content/uploads/cache/'
+)
+
+# sudo: files WordPress creates are owned www-data:www-data, and this script
+# runs as webmasterish, which is neither the owner nor (by default) in that
+# group -- so rsync cannot overwrite a plugin file the site updated itself and
+# dies with "mkstemp ... Permission denied", exit 23. This is a local copy, no
+# SSH involved, so sudo costs nothing. The normalisation step below puts
+# ownership back afterwards.
+sudo rsync -a --delete --exclude='*.bak-*' "${CACHE_EXCLUDES[@]}" \
+  --chmod=D775,F664 --stats \
   "${BACKUP}/sites/${DOMAIN}/public_html/" "${DOCROOT}/" \
   | grep -E 'Number of (regular files transferred|deleted files)' | sed 's/^/    /'
 

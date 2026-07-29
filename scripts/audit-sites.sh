@@ -128,13 +128,25 @@ for conf in "${VHOSTS}"/*/*/config "${VHOSTS}"/*/*/subs/*/config; do
   [[ -n "${real_root}" ]] && docroot="${real_root}"
   printf '  docroot       %s\n' "${docroot}"
 
+  # A provisioned-but-not-yet-cut-over site has no certificate, so an HTTPS
+  # request hits the catch-all and returns ITS 404 page -- which the probe then
+  # reports as the site's PHP version. Probe over HTTP in that case, and treat
+  # the missing certificate as a pre-cutover state rather than a fault.
+  HAS_TLS=0
+  sudo test -f "/etc/letsencrypt/live/${domain}/fullchain.pem" && HAS_TLS=1
+
   serving="n/a"
   if [[ -d "${docroot}" ]]; then
     printf '<?php echo php_sapi_name()."|".PHP_VERSION;' \
       | sudo tee "${docroot}/${PROBE}" >/dev/null 2>&1
     sudo chown webmasterish:www-data "${docroot}/${PROBE}" 2>/dev/null
-    serving=$(curl -sk -m 15 --resolve "${domain}:443:${MY_IP}" \
-      "https://${domain}/${PROBE}" 2>/dev/null | head -c 40)
+    if [[ ${HAS_TLS} -eq 1 ]]; then
+      serving=$(curl -sk -m 15 --resolve "${domain}:443:${MY_IP}" \
+        "https://${domain}/${PROBE}" 2>/dev/null | head -c 40)
+    else
+      serving=$(curl -s -m 15 --resolve "${domain}:80:${MY_IP}" \
+        "http://${domain}/${PROBE}" 2>/dev/null | head -c 40)
+    fi
     sudo rm -f "${docroot}/${PROBE}"
   fi
   printf '  serving       %s\n' "${serving:-<no response>}"
@@ -153,8 +165,7 @@ for conf in "${VHOSTS}"/*/*/config "${VHOSTS}"/*/*/subs/*/config; do
     printf '  cert          %s (%s days)\n' "${names}" "${days}"
     [[ "${days}" -lt 21 ]] && note "${domain}: certificate expires in ${days} days"
   else
-    printf '  cert          NONE\n'
-    note "${domain}: no certificate"
+    printf '  cert          NONE (not cut over yet)\n'
   fi
 
   # --- responses -----------------------------------------------------------
@@ -163,7 +174,12 @@ for conf in "${VHOSTS}"/*/*/config "${VHOSTS}"/*/*/subs/*/config; do
   hp=$(curl -s -o /dev/null -m 15 --resolve "${domain}:80:${MY_IP}" \
     -w '%{http_code}' "http://${domain}/" 2>/dev/null)
   printf '  origin        http:%s https:%s\n' "${hp}" "${hs}"
-  [[ "${hs}" == "200" ]] || note "${domain}: origin HTTPS returned ${hs}"
+  if [[ ${HAS_TLS} -eq 1 ]]; then
+    [[ "${hs}" == "200" ]] || note "${domain}: origin HTTPS returned ${hs}"
+  else
+    # No certificate yet, so HTTPS legitimately lands on the catch-all.
+    [[ "${hp}" =~ ^(200|301)$ ]] || note "${domain}: origin HTTP returned ${hp}"
+  fi
 
   # --- source disclosure ---------------------------------------------------
   if [[ -f "${docroot}/wp-config.php" ]]; then
