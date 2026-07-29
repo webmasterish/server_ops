@@ -157,17 +157,41 @@ seconds.
 curl -sS -o /dev/null -w '%{remote_ip}\n' -L https://<domain>/
 ```
 
-Must print `91.99.146.221`. Until it does, the certificate step will refuse.
+For a direct (non-proxied) domain this must print `91.99.146.221`.
+
+**For a Cloudflare-proxied domain it will print a Cloudflare address, and that
+is correct** — the A record points at Cloudflare by design. A 200 alone proves
+nothing here, because Cloudflare may still be reaching Hostinger, or serving
+from cache. Check the origin actually saw the request:
+
+```bash
+curl -sS -o /dev/null "https://<domain>/?cachebust=$RANDOM"
+tail -3 /var/www/vhosts/<group>/<domain>/logs/access.log
+```
+
+The request should appear, from a Cloudflare IP (`172.70.x`, `104.x`, `188.114.x`).
 
 ### 7. Certificate and redirect
 
 ```bash
+# direct
 ~/server_ops/scripts/enable-site-ssl.sh <group> <domain>
+
+# behind Cloudflare
+~/server_ops/scripts/enable-site-ssl.sh <group> <domain> --proxied --no-redirect
 ```
 
-Refuses if DNS has not propagated, rather than burning one of five hourly
-Let's Encrypt validation attempts. Add `--no-redirect` for Cloudflare-proxied
-sites, which redirect at the edge already.
+Refuses if the site does not reach this server, rather than burning one of five
+hourly Let's Encrypt validation attempts.
+
+`--proxied` is required for Cloudflare domains. Without it the guard compares
+the A record against this server's IP, which for a proxied domain can never
+match, and it will refuse a perfectly good cutover. With it, the guard writes a
+probe value into the docroot and fetches it over the public hostname instead —
+proving the ACME challenge will arrive, which is the thing that actually
+matters.
+
+`--no-redirect` for proxied sites: Cloudflare redirects at the edge.
 
 ### 8. Leave Hostinger alone
 
