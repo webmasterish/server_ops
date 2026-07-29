@@ -97,6 +97,29 @@ if [[ -f "${DOCROOT}/.htaccess" ]] && grep -q 'MIGRATION-FREEZE-START' "${DOCROO
 fi
 rm -f "${DOCROOT}/maintenance.html"
 
+# Neutralise Hostinger's PHP-FPM SetHandler.
+#
+# Some sites carry an ACTIVE
+#   SetHandler "proxy:unix:/var/run/php/php8.3-fpm.sock|fcgi://localhost"
+# in .htaccess (nidaldirani.com and shamsaldhaher.com; most others have it
+# commented). Hostinger ran PHP that way. Hetzner uses mod_php and does NOT
+# load proxy_fcgi, so Apache does not recognise the handler and falls back to
+# serving the file as a STATIC DOCUMENT -- returning raw PHP source instead of
+# executing it. Verified: wp-config.php was served as plain text.
+#
+# Left unfixed this is both a broken site and a source disclosure, and it would
+# go live the moment DNS moves.
+#
+# Commenting it out matches what the other migrated sites already have. The
+# real fix is deciding between mod_php and PHP-FPM for the whole box -- see
+# inventory B6 -- at which point this can be revisited.
+if [[ -f "${DOCROOT}/.htaccess" ]] \
+   && grep -qE '^[[:space:]]*SetHandler[[:space:]]+"proxy:unix:' "${DOCROOT}/.htaccess"; then
+  log "       neutralising Hostinger PHP-FPM SetHandler (no proxy_fcgi here)"
+  sed -i -E 's|^([[:space:]]*)(SetHandler[[:space:]]+"proxy:unix:)|\1# migrated: no proxy_fcgi on this host\n\1#\2|' \
+    "${DOCROOT}/.htaccess"
+fi
+
 # ---------------------------------------------------------------------------
 # 3. Re-apply the local DB naming
 # ---------------------------------------------------------------------------
@@ -105,11 +128,31 @@ rm -f "${DOCROOT}/maintenance.html"
 # the u918436082_* names -- step 2 overwrites whatever we set previously, so
 # without this the site points at a database that does not exist here.
 
-if [[ -f "${CONFIG}" ]]; then
-  log "step 3/5 -- repointing config at ${DBNAME}"
-  php "${HERE}/set-site-db.php" "${CONFIG}" "${DBNAME}" | sed 's/^/    /'
+# The production config file is NOT consistently named. Across these sites it
+# is master_config.php, main_config.php, live_config.php, or plain config.php
+# as the generic fallback -- wp-config picks by $_SERVER['SERVER_NAME'] and each
+# site was set up slightly differently. Hardcoding one name silently repoints
+# nothing on the sites that use another, and the first symptom is a database
+# connection error after cutover.
+#
+# So: find every file under .config/ that names the SOURCE database, and repoint
+# all of them. Files that are not the active one are harmless to update.
+
+SRC_DB=$(awk '/^database:/ {print $2}' "${BACKUP}/manifest/${DOMAIN}.txt" 2>/dev/null || true)
+
+log "step 3/5 -- repointing config at ${DBNAME}"
+if [[ -z "${SRC_DB}" || "${SRC_DB}" == "(none)" ]]; then
+  log "       no source database recorded, skipping"
 else
-  log "step 3/5 -- no master_config.php, skipping"
+  mapfile -t CONFIG_FILES < <(grep -rl "${SRC_DB}" "${DOCROOT}/.config/" 2>/dev/null || true)
+  if [[ ${#CONFIG_FILES[@]} -eq 0 ]]; then
+    log "       WARNING: no config file under .config/ references ${SRC_DB}"
+    log "       the site will not connect -- check the config layout by hand"
+  fi
+  for cf in "${CONFIG_FILES[@]}"; do
+    log "       $(basename "${cf}")"
+    php "${HERE}/set-site-db.php" "${cf}" "${DBNAME}" | sed 's/^/         /'
+  done
 fi
 
 # ---------------------------------------------------------------------------
@@ -150,6 +193,15 @@ log "       normalising ownership and permissions"
 sudo chown -R webmasterish:www-data "${DOCROOT}"
 sudo find "${DOCROOT}" -type d -exec chmod 775 {} +
 sudo find "${DOCROOT}" -type f -exec chmod 664 {} +
+# wp-config.php is deliberately NOT group-writable, unlike the rest of the
+# tree. It holds the database credentials, and nothing in normal operation
+# needs to rewrite it -- WP Super Cache tries, but only because it found a
+# stale WPCACHEHOME, which step 3b has already corrected. Leaving it 664 would
+# let any compromised plugin rewrite the file WordPress loads first on every
+# request.
+if [[ -f "${DOCROOT}/wp-config.php" ]]; then
+  sudo chmod 644 "${DOCROOT}/wp-config.php"
+fi
 
 # ---------------------------------------------------------------------------
 # 4. Rebuild the database
@@ -160,7 +212,7 @@ DUMP=$(ls -t "${BACKUP}"/db/*.sql.bz2 2>/dev/null \
 DUMP="${DUMP:-$(ls -t "${BACKUP}"/db/*.sql.bz2 | head -1)}"
 
 # Prefer the dump whose name matches the source database for this site.
-SRC_DB=$(grep -oP '(?<=^database:\s{4})\S+' "${BACKUP}/manifest/${DOMAIN}.txt" 2>/dev/null || true)
+# SRC_DB was resolved in step 3.
 [[ -n "${SRC_DB}" && -f "${BACKUP}/db/${SRC_DB}.sql.bz2" ]] && DUMP="${BACKUP}/db/${SRC_DB}.sql.bz2"
 
 log "step 4/5 -- rebuilding ${DBNAME} from $(basename "${DUMP}")"

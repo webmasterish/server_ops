@@ -89,6 +89,8 @@ if [[ -n "${CONTENT}" ]]; then
   sudo chown -R webmasterish:www-data "${DOCROOT}"
   sudo find "${DOCROOT}" -type d -exec chmod 775 {} +
   sudo find "${DOCROOT}" -type f -exec chmod 664 {} +
+  # See resync-site.sh: wp-config.php stays 644, it holds the DB credentials.
+  [[ -f "${DOCROOT}/wp-config.php" ]] && sudo chmod 644 "${DOCROOT}/wp-config.php"
   log "content: $(find "${DOCROOT}" -type f | wc -l) files"
 fi
 
