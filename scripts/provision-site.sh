@@ -82,8 +82,13 @@ if [[ -n "${CONTENT}" ]]; then
   [[ -d "${CONTENT}" ]] || { echo "no such content dir: ${CONTENT}" >&2; exit 1; }
   log "deploying content from ${CONTENT}"
   # No --delete: this must never remove something already live in a docroot.
-  rsync -a "${CONTENT%/}/" "${DOCROOT}/"
+  # --chmod forces the house permissions rather than inheriting Hostinger's:
+  # there PHP ran as the account owner so 755/644 was writable, here Apache is
+  # www-data and needs group write or plugin/theme updates fail.
+  rsync -a --chmod=D775,F664 "${CONTENT%/}/" "${DOCROOT}/"
   sudo chown -R webmasterish:www-data "${DOCROOT}"
+  sudo find "${DOCROOT}" -type d -exec chmod 775 {} +
+  sudo find "${DOCROOT}" -type f -exec chmod 664 {} +
   log "content: $(find "${DOCROOT}" -type f | wc -l) files"
 fi
 

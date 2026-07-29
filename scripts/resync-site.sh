@@ -73,11 +73,14 @@ log "step 2/5 -- syncing files into ${DOCROOT}"
 # --delete so files removed at the source are removed here too. The .bak-*
 # exclusion protects the config backups this script and set-site-db.php leave
 # behind -- they do not exist at the source, so --delete would eat them.
-rsync -a --delete --exclude='*.bak-*' --stats \
+# --chmod forces the house permissions as files land, rather than inheriting
+# Hostinger's. There PHP ran as the account owner, so 755/644 was writable by
+# the web server; here Apache runs as www-data, so the group needs write or
+# WordPress cannot create content/upgrade/<plugin> and every plugin update
+# fails with "Could not create directory".
+rsync -a --delete --exclude='*.bak-*' --chmod=D775,F664 --stats \
   "${BACKUP}/sites/${DOMAIN}/public_html/" "${DOCROOT}/" \
   | grep -E 'Number of (regular files transferred|deleted files)' | sed 's/^/    /'
-
-sudo chown -R webmasterish:www-data "${DOCROOT}"
 
 # Strip the cutover maintenance freeze from the DESTINATION copy.
 #
@@ -129,6 +132,24 @@ if grep -q "${OLD_PATH}" "${DOCROOT}/wp-config.php" 2>/dev/null; then
   cp "${DOCROOT}/wp-config.php" "${DOCROOT}/wp-config.php.bak-$(date +%F-%H%M%S)"
   sed -i "s#${OLD_PATH}#${DOCROOT}#g" "${DOCROOT}/wp-config.php"
 fi
+
+# ---------------------------------------------------------------------------
+# 3c. Normalise ownership and permissions
+# ---------------------------------------------------------------------------
+#
+# LAST, after every file has been written. `sed -i` and `php` above recreate
+# files and hand them the caller's default group, so normalising earlier leaves
+# exactly the files this script touched owned wrongly -- wp-config.php ended up
+# webmasterish:webmasterish that way, which is the file WordPress most needs to
+# read.
+#
+# 775/664 with group www-data matches dotaim.com and ayatalquran.com, the two
+# WordPress sites already working on this box.
+
+log "       normalising ownership and permissions"
+sudo chown -R webmasterish:www-data "${DOCROOT}"
+sudo find "${DOCROOT}" -type d -exec chmod 775 {} +
+sudo find "${DOCROOT}" -type f -exec chmod 664 {} +
 
 # ---------------------------------------------------------------------------
 # 4. Rebuild the database
