@@ -13,12 +13,13 @@
 #
 # Deliberately NOT in scope (docs/inventory.md section 1.1):
 #   woo.lushlebanon.com        moved to Shopify, backup has no value
-#   shamsaldhaher.com          migrate/keep decision still open
-#   billing.shamsaldhaher.com  migrate/keep decision still open
 #
-# Those three are excluded by decision, not oversight. If the deadline
-# commitment is meant to cover everything on the account, the latter two still
-# need a run before the plan lapses.
+# That one is excluded by decision, not oversight.
+#
+# shamsaldhaher.com and billing.shamsaldhaher.com came INTO scope on
+# 2026-07-30: the client is not keeping them running, so they are archived
+# here rather than migrated. They are in the same set as everything else so
+# verify-hostinger-backup.sh covers them without a second run.
 
 set -uo pipefail
 
@@ -28,10 +29,11 @@ ONE="${HERE}/backup-hostinger-site.sh"
 DEST="${BACKUP_ROOT:-/var/www/backups/hostinger}/${SET}"
 LOG="${DEST}/run.log"
 
-# domain <TAB> db-mode   (a wp subpath, --piwigo, or --no-db)
+# domain <TAB> db-mode   (a wp subpath, --piwigo, --laravel, or --no-db)
 SITES=$(cat <<'LIST'
 menamaps.com	cms
 memories.mardini.net	--piwigo
+billing.shamsaldhaher.com	--laravel
 lebanese.tech	cms
 videotizer.com	cms
 hirement.com	cms
@@ -39,6 +41,7 @@ grand-emerald.com	cms
 nidaldirani.com	cms
 singlefunction.com	cms
 skinosis.com	cms
+shamsaldhaher.com	cms
 sasf-ksa.com	--no-db
 webmasterish.com	--no-db
 lamarkazia.com	--no-db

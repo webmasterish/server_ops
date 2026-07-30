@@ -5,11 +5,13 @@
 # RUN THIS ON hetzner, not locally -- it pulls server-to-server so the payload
 # never crosses a home connection.
 #
-#   ./backup-hostinger-site.sh <domain> [wp-subpath|--no-db]
+#   ./backup-hostinger-site.sh <domain> [wp-subpath|--piwigo|--laravel|--no-db]
 #
-#   ./backup-hostinger-site.sh skinosis.com          # WP in public_html/cms
-#   ./backup-hostinger-site.sh woo.example.com .     # WP at docroot
-#   ./backup-hostinger-site.sh mardini.net --no-db   # static, no database
+#   ./backup-hostinger-site.sh skinosis.com            # WP in public_html/cms
+#   ./backup-hostinger-site.sh woo.example.com .       # WP at docroot
+#   ./backup-hostinger-site.sh memories.x.net --piwigo # Piwigo gallery
+#   ./backup-hostinger-site.sh billing.x.com --laravel # Laravel .env
+#   ./backup-hostinger-site.sh mardini.net --no-db     # static, no database
 #
 # Writes to /var/www/backups/hostinger/<set>/ (default set: "synced") :
 #   sites/<domain>/         rsync'd tree
@@ -26,8 +28,19 @@
 
 set -euo pipefail
 
-DOMAIN="${1:?usage: $0 <domain> [wp-subpath|--no-db]}"
+DOMAIN="${1:?usage: $0 <domain> [wp-subpath|--piwigo|--laravel|--no-db]}"
 WP_PATH="${2:-cms}"
+
+# Laravel keeps its credentials in a .env file, which is not PHP and has no
+# loader we can call from the CLI without booting the framework. Booting it is
+# what we are trying to avoid -- billing.shamsaldhaher.com is Invoice Ninja,
+# and `artisan` on a production install runs service providers and touches the
+# database. So: parse the file directly.
+#
+# Written with no single quotes anywhere, so the whole snippet can be dropped
+# inside php -r '...' on the remote shell without any escaping games. chr(39)
+# is how it tests for a single-quoted value.
+ENV_PHP='$e=[]; foreach(file(".env") as $l){ $l=trim($l); if($l==="" || $l[0]==="#") continue; $p=explode("=",$l,2); if(count($p)<2) continue; $k=trim($p[0]); $v=trim($p[1]); $q=substr($v,0,1); if(strlen($v)>1 && ($q===chr(34)||$q===chr(39)) && substr($v,-1)===$q) $v=substr($v,1,-1); $e[$k]=$v; }'
 
 REMOTE="${REMOTE_ALIAS:-hostinger}"
 SET="${BACKUP_SET:-synced}"
@@ -92,6 +105,10 @@ if [[ "${WP_PATH}" != "--no-db" ]]; then
     DB_NAME=$(ssh -n "${SSH_OPTS[@]}" "${REMOTE}" \
       "cd domains/${DOMAIN}/public_html && php -r '\$conf=array(); include \"local/config/database.inc.php\"; echo \$conf[\"db_base\"];'" \
       | tr -d '[:space:]')
+  elif [[ "${WP_PATH}" == "--laravel" ]]; then
+    DB_NAME=$(ssh -n "${SSH_OPTS[@]}" "${REMOTE}" \
+      "cd domains/${DOMAIN}/public_html && php -r '${ENV_PHP} echo \$e[\"DB_DATABASE\"];'" \
+      | tr -d '[:space:]')
   else
     # The custom wp-config picks its config file by $_SERVER['SERVER_NAME'],
     # which is empty under CLI -- without it the config falls through to a root
@@ -131,6 +148,11 @@ if [[ "${WP_PATH}" != "--no-db" ]]; then
   # eval. Same contract, different source of truth.
   if [[ "${WP_PATH}" == "--piwigo" ]]; then
     CRED_EVAL="php -r '\$conf=array(); include \"local/config/database.inc.php\"; printf(\"export MYSQL_PWD=%s DBU=%s DBH=%s DBN=%s\", escapeshellarg(\$conf[\"db_password\"]), escapeshellarg(\$conf[\"db_user\"]), escapeshellarg(\$conf[\"db_host\"]), escapeshellarg(\$conf[\"db_base\"]));'"
+  elif [[ "${WP_PATH}" == "--laravel" ]]; then
+    # DBP as well: Laravel names the port separately, where WP and Piwigo fold
+    # it into the host string. Defaulted below rather than here so an absent
+    # DB_PORT does not trip `set -u` in the remote script.
+    CRED_EVAL="php -r '${ENV_PHP} printf(\"export MYSQL_PWD=%s DBU=%s DBH=%s DBN=%s DBP=%s\", escapeshellarg(\$e[\"DB_PASSWORD\"]), escapeshellarg(\$e[\"DB_USERNAME\"]), escapeshellarg(\$e[\"DB_HOST\"]), escapeshellarg(\$e[\"DB_DATABASE\"]), escapeshellarg(\$e[\"DB_PORT\"] ?? \"3306\"));'"
   else
     CRED_EVAL="SERVER_NAME='${DOMAIN}' wp eval 'printf(\"export MYSQL_PWD=%s DBU=%s DBH=%s DBN=%s\", escapeshellarg(DB_PASSWORD), escapeshellarg(DB_USER), escapeshellarg(DB_HOST), escapeshellarg(DB_NAME));' --path='${WP_PATH}' --skip-themes --skip-plugins 2>/dev/null"
   fi
@@ -140,8 +162,18 @@ if [[ "${WP_PATH}" != "--no-db" ]]; then
 set -euo pipefail
 cd "domains/${DOMAIN}/public_html"
 eval "\$(${CRED_EVAL})"
+# Passing --port at all switches the client to TCP, and Hostinger's grants are
+# socket-only: against host=localhost the connection is refused as an access
+# denial naming the IPv6 loopback, even though the very same credentials
+# succeed over the socket. So only pass it when the host is genuinely remote,
+# where TCP is the only option anyway.
+PORT_OPT=""
+if [ -n "\${DBP:-}" ] && [ "\$DBH" != localhost ] && [ "\$DBH" != 127.0.0.1 ]; then
+  PORT_OPT="--port=\$DBP"
+fi
+
 mysqldump --single-transaction --quick --default-character-set=utf8mb4 \\
-  --host="\$DBH" --user="\$DBU" "\$DBN"
+  --host="\$DBH" \${PORT_OPT} --user="\$DBU" "\$DBN"
 REMOTE_SCRIPT
 
   TABLES=$(bzcat "${DB_FILE}" | grep -c '^CREATE TABLE' || true)
