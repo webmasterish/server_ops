@@ -162,6 +162,31 @@ Either:
   (step 7), then move it to Full (strict); or
 - **grey-cloud** the record (DNS-only), issue the certificate, then re-proxy.
 
+**These two are not interchangeable, and which one you have decides how bad a
+mistake is.** On a Flexible zone, repointing before the certificate exists is
+survivable — Cloudflare talks to the origin over plain HTTP and the site keeps
+serving. On a **Full (strict)** zone it is an outage: 526 on every HTTPS
+request until the certificate exists.
+
+menamaps.com hit exactly this on 2026-07-30. Its zone is Full (strict), the plan
+said to grey-cloud the apex first, and the A record was moved while still
+orange-clouded. Roughly seven minutes of visible downtime on the estate's only
+store.
+
+**If you hand the DNS change to someone else, write the cloud state as its own
+numbered step**, not as prose next to the record value. "Point the A record at
+91.99.146.221" is read and actioned; "grey-cloud it first" alongside is not.
+
+Recovery is possible and quick, for a non-obvious reason: **Cloudflare exempts
+`/.well-known/acme-challenge/` from Always Use HTTPS.** So even on a zone that
+is 526ing, and even with Always Use HTTPS on, the HTTP-01 challenge still
+reaches the origin over plain HTTP and the certificate issues normally. The 526
+clears on the Apache reload.
+
+Verify that with the probe below rather than assuming it — it is a Cloudflare
+behaviour, not a guarantee, and it is the difference between a seven-minute
+outage and a much longer one.
+
 If you hit it anyway it is recoverable, because Cloudflare still proxies plain
 HTTP to the origin over HTTP even in strict mode — so `enable-site-ssl.sh
 --proxied` completes over HTTP-01 and the 526 clears as soon as Apache reloads.

@@ -66,6 +66,30 @@ Two defences, both in place:
 
 **Any new vhost must get one or the other before it serves a `.php` file.**
 
+## Per-site limit overrides
+
+A site needing non-default `php_admin_value` limits gets a file at
+`templates/fpm-limits/<domain>.conf`. `set-site-php.sh` appends it verbatim to
+the generated pool, last, so it wins over the defaults. No file means stock
+limits, which is every site except **menamaps.com**.
+
+**Do not hand-edit the pool file.** `set-site-php.sh` rewrites
+`/etc/php/<ver>/fpm/pool.d/<domain>.conf` from its template on every run and the
+pool header says so. A limit typed in there works until the next run of the
+script and then silently reverts — for menamaps.com that would mean
+`memory_limit` dropping from 1024M back to Debian's 128M, which surfaces as
+Printify batch operations dying rather than as anything pointing at PHP config.
+This is the same shape of bug as `provision-site.sh` destroying the PHP handler
+block on rewrite, which left lebanese.tech serving two different PHP versions
+over HTTP and HTTPS at the same moment.
+
+Confirm limits are actually in effect by asking PHP over HTTP, not by reading
+the pool file — same principle as the SAPI check above:
+
+```php
+<?php echo ini_get('memory_limit')."|".ini_get('max_execution_time');
+```
+
 ## Pool sizing
 
 `pm = ondemand` by default, `max_children = 8`, idle workers exit after 60s.
@@ -97,6 +121,8 @@ sudo a2enmod mpm_prefork php8.3
 sudo systemctl restart apache2
 ```
 
-Only valid while every site still runs 8.3 — mod_php cannot serve 7.4 or 8.5,
-so once lebanese.tech, singlefunction.com or menamaps.com are on their own
-versions this is no longer a way back.
+**This is no longer a way back, as of 2026-07-30.** It was only ever valid while
+every site ran 8.3. lebanese.tech and singlefunction.com are on 7.4 and
+menamaps.com is on 8.5; mod_php can serve exactly one version, so reverting
+would take those three off the air. Kept here as a record of what the escape
+hatch was, not as a procedure to run.

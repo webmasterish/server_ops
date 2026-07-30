@@ -94,15 +94,27 @@ Consequences for migration:
   stock-layout install, and it is not migrating, so the provisioning tooling
   only ever has to handle the `cms/content` layout.
 
-### 1.3 Cron jobs — NOT ENUMERABLE
+### 1.3 Cron jobs — CLOSED, there are none
 
-`crontab` is not available over SSH on this plan; scheduled tasks are stored
-in hPanel only. **This is an open gap — cron jobs must be read out of hPanel
-manually before the plan lapses.**
+**Resolved 2026-07-30.** The owner confirmed from hPanel that the account has
+**no cron jobs at all**. Nothing to carry across, nothing to recreate.
 
-Indirect evidence that scheduled tasks exist: `~/mm-scripts/` contains
-`batch-create.php`, `batch-golive.php`, `canonicalize-city-terms.php`
-(menamaps.com tooling, last modified 2026-07-26 — actively used).
+`crontab` is not available over SSH on this plan and scheduled tasks are stored
+in hPanel only, which is why this could not be answered from the shell and stood
+open as long as it did.
+
+The indirect evidence that suggested otherwise was misread: `~/mm-scripts/`
+(`batch-create.php`, `batch-golive.php`, `canonicalize-city-terms.php`,
+menamaps.com tooling, last modified 2026-07-26) are **hand-run `wp eval-file`
+tools, not scheduled jobs**, and all three are tracked in the menamaps repo
+under `scripts/printify/` and `scripts/products/`. `~/mm-scripts/` was scratch
+space for a CLI run. Active use is not evidence of automation.
+
+WordPress's own scheduled events live in `wp_options` and travel with the
+database dump, so they were never at risk either. menamaps.com now has a
+**system** wp-cron entry on Hetzner — see
+`docs/handover-menamaps-migration.md` §3 — but that is a new addition for a
+store with Action Scheduler, not a Hostinger job being reproduced.
 
 ### 1.4 Mailboxes — NOT ENUMERABLE (and deferred)
 

@@ -1,6 +1,10 @@
 # Migration status
 
-Updated 2026-07-29. Hetzner is `91.99.146.221`. Hostinger is `82.25.96.229`.
+Updated 2026-07-30. Hetzner is `91.99.146.221`. Hostinger is `82.25.96.229`.
+
+**All 15 sites are live on Hetzner.** menamaps.com cut over 2026-07-30; phases 1
+and 2 are complete and the handback list in
+`docs/handover-menamaps-migration.md` §10 is now with the menamaps project.
 
 ## Live on Hetzner — all static sites done
 
@@ -33,13 +37,67 @@ non-zero on any finding.
 
 | memories.mardini.net | `mardini` (sub) | `mardini_memories_website_piwigo` | 2026-10-27 | **Piwigo**, not WordPress; 2.7 GB of photos |
 
+| menamaps.com | `dotaim` | `menamaps_website_wp` | 2026-10-28 | **PHP 8.5**, WooCommerce + Stripe (HPOS); Cloudflare Full (strict); per-site FPM limits; system wp-cron |
+
 ## Remaining
 
-| Site | PHP | Notes |
-|---|---|---|
-| menamaps.com | 8.5 | migrated from its own project — see `docs/handover-menamaps-migration.md` |
+Nothing. **15 of 15 sites are live on Hetzner.**
 
-**Everything migratable from this repo is done — 14 of 15 sites.**
+## menamaps.com — cutover record, 2026-07-30
+
+The only site with per-site FPM limits and the only one with a system wp-cron
+entry. Both are documented in `docs/handover-menamaps-migration.md` §2 and §3.
+
+Counts matched exactly across the freeze, using the **HPOS** tables — this store
+keeps orders in `wp_wc_orders`, not `wp_posts`, and the generic
+`post_type = 'shop_order'` query returns 0 on both sides and compares as a pass:
+
+| | pre-freeze source | post-cutover destination |
+|---|---|---|
+| `wp_wc_orders` | 15 (newest 2026-07-20 23:20:25) | 15 (same timestamp) |
+| statuses | `wc-completed` 8, `wc-checkout-draft` 7 | identical |
+| `wp_woocommerce_order_items` | 41 | 41 |
+| `wp_wc_order_stats` | 15 | 15 |
+| Action Scheduler pending | 15 | 15 |
+| products / variations | 861 / 9,824 | 861 / 9,824 |
+| attachments | 14,448 | 14,448 |
+| `wp_posts` / `wp_options` | 25,339 / 3,082 | 25,339 / 3,082 |
+| tables | 52 | 52 |
+
+No order was in `wc-pending`, `wc-on-hold` or `wc-processing`, and the newest
+was ten days old, so the freeze could not land between a payment and its
+webhook. `wc-checkout-draft` rows are abandoned carts, not payments in flight.
+
+Verified after cutover: pretty permalinks under Apache (this site was on
+LiteSpeed, so `AllowOverride All` had to be in effect), `/lebanon/` 301ing to
+`/product-category/locations/lebanon/` **with the query string carried across**,
+`/llms.txt`, `/wp-sitemap.xml`, and `content/uploads/menamaps-maps/` and
+`content/uploads/wc-logs/` writable by the pool user by actual write test rather
+than by reading permission bits.
+
+### The 526: the record was left orange-clouded through the cutover
+
+The plan called for grey-clouding the apex before repointing it, because the
+zone runs **Full (strict)**. The A record was moved while still proxied, so
+Cloudflare could not validate an origin that had no certificate yet and every
+HTTPS request returned **526** until the certificate was issued. The site was
+visibly down for roughly seven minutes.
+
+It was recoverable for the reason the runbook gives: Cloudflare still proxies
+plain HTTP to the origin even in strict mode, and **Cloudflare exempts
+`/.well-known/acme-challenge/` from Always Use HTTPS** — verified with a probe
+before spending a validation attempt, rather than assumed. `enable-site-ssl.sh
+--proxied --no-redirect` then completed over HTTP-01 and the 526 cleared on the
+Apache reload.
+
+Because the record never left orange, the zone ended in its target state with no
+re-proxy step. `ssl_verify:0` on both apex and `www`, so Full (strict) is
+satisfied.
+
+**Lesson: grey-cloud is not interchangeable with Flexible on a Full (strict)
+zone.** On a Flexible zone, repointing early is survivable. Here it is a visible
+outage, and the only reason it was a short one is that the ACME carve-out
+exists.
 
 ## memories.mardini.net: photos return 403 unless logged in
 
@@ -67,7 +125,15 @@ to the source, and that it keys on the cookie: 403 without, 200 with.
 - **Hostinger freezes remain in place** on every migrated site, deliberately.
   Rolling any of them back means reverting DNS *and* lifting the freeze.
 
-All WordPress sites run PHP 8.3 via per-site FPM pools. See `docs/runbook-fpm.md`.
+Every site runs a per-site FPM pool. See `docs/runbook-fpm.md`. Three PHP
+versions are in use — **8.3** for most, **7.4** for lebanese.tech and
+singlefunction.com, **8.5** for menamaps.com — which is why mod_php could not
+host this estate at all.
+
+menamaps.com is the only site with non-default FPM limits. They live in
+`templates/fpm-limits/menamaps.com.conf` and are reapplied by `set-site-php.sh`
+on every run; they are **not** hand-edited into the pool file, which the script
+regenerates each time.
 
 **Note on database names:** they do not all follow `<project>_website_wp`.
 skinosis.com is `skinosis_skinosis_com_wp`, and its local layout is
@@ -81,7 +147,9 @@ Post/option counts and newest timestamp matched the frozen source exactly.
 **The Hostinger copy is still frozen (503) and should stay that way** — see
 rollback in the runbook, which requires lifting it.
 
-**Next: the remaining eight WordPress sites.**
+**Next, in order:** the S3 offsite push (the last hard-deadline item still
+open), then per-site FPM users, then moving the three remaining zones off
+Hostinger nameservers.
 
 ## Do not delete from Hostinger yet
 

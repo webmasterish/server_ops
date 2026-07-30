@@ -11,6 +11,45 @@ wins.
 The session prompt that starts this work lives in
 `__/sessions/session_2026-07-30.md` → *Pick up from here*, not here.
 
+## STATUS: phases 1 and 2 are COMPLETE — cut over 2026-07-30, live on Hetzner
+
+Everything below the ownership table is the plan as written beforehand, kept for
+its reasoning. What actually happened, and what is still owed:
+
+- **Live on Hetzner** on PHP 8.5.8, `menamaps_website_wp`, certificate valid to
+  2026-10-28, Cloudflare Full (strict), system wp-cron installed.
+- **All HPOS counts matched the pre-freeze baseline exactly** — orders,
+  order_items, order_stats, Action Scheduler pending, products, variations,
+  attachments, 52 tables. Figures in `migration/status.md`.
+- **The Hostinger source is still frozen** (503 + `Retry-After`), deliberately,
+  and stays that way. Rolling back means reverting DNS *and* lifting the freeze.
+- **One thing went wrong: the apex was left orange-clouded** when the A record
+  was repointed, so Full (strict) gave 526 on every HTTPS request until the
+  certificate existed — about seven minutes of visible downtime. See
+  `migration/status.md` for the recovery and the lesson. §4 below was right and
+  was not followed; it is not a step to skip on the next Full (strict) zone.
+- **Still owed: §10, the handback list**, which is the menamaps project's. Item
+  4 — end-to-end checkout test, and confirming the unchanged Stripe webhook is
+  delivering — is the one that matters most, and the freeze on Hostinger should
+  stay up until it passes.
+- **One item for the menamaps project to judge, not a fault:** `siteurl` is
+  `http://menamaps.com/cms`, carried across unchanged from Hostinger. It works
+  because Cloudflare terminates TLS and rewrites at the edge, exactly as before.
+  Flagged rather than changed — site config belongs to that repo.
+
+### The five FPM limits are NOT hand-edited into the pool
+
+They live in `templates/fpm-limits/menamaps.com.conf` and `set-site-php.sh`
+appends them on every run. §2 below says to add them to the pool by hand; that
+was changed during the cutover, because the script rewrites the pool from its
+template each time and the pool header says edits are overwritten. Hand-editing
+would have worked until the next `set-site-php.sh` run and then silently
+reverted to a 128M `memory_limit`. Verified in effect over HTTP after
+provisioning, by asking PHP rather than by reading the config:
+`fpm-fcgi|8.5.8|mem=1024M|upl=128M|post=128M|exec=300|vars=5000|svg=yes`.
+
+---
+
 ## Current state
 
 - **Backed up and verified.** `/var/www/backups/hostinger/synced/` on Hetzner
