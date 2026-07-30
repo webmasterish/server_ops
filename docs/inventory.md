@@ -50,14 +50,20 @@ Docroot pattern: `~/domains/<domain>/public_html`
 | Site | Disposition |
 |---|---|
 | `woo.lushlebanon.com` | **Leave in place, exclude from the backup.** The store moved to Shopify, so the copy has no value, and its Hostinger backup has never completed successfully in past attempts. Deleting it changes nothing operationally, so it stays until the migration is finished — the owner may yet decide to push a copy to S3. Excluded from all rsync and dump runs meanwhile. |
-| `shamsaldhaher.com` | **Back up. Probably not migrating** — pending final call. |
-| `billing.shamsaldhaher.com` | **Back up. Probably not migrating** — pending final call. |
+| `shamsaldhaher.com` | **Archived, not migrating** — final call 2026-07-30, the client is not keeping it running. Captured and verified: 7,754 files, `u918436082_shamsaldhaher`, 14 tables. |
+| `billing.shamsaldhaher.com` | **Archived, not migrating** — same call. Captured and verified: 71,291 files, `u918436082_billing`, 70 tables. Invoice Ninja (Laravel), backed up via the `--laravel` mode of `backup-hostinger-site.sh`. |
 | `menamaps.com` | **Back up now. Migrate later, from its own project** — see §1.6. |
 | everything else | Back up and migrate. |
 
 "Not migrating" still means "back up" — the deadline commitment is complete
 verified backups of everything on Hostinger. `woo.lushlebanon.com` is the sole
 exception, by explicit decision.
+
+**Status 2026-07-31: the commitment is met.** All 16 in-scope sites are captured,
+all 11 dumps verified to restore into MySQL 8.0, and the whole set is offsite in
+Cloudflare R2 (`docs/runbook-backups.md`). The local copy under
+`/var/www/backups/hostinger/synced` has since been deleted; it lives on as restic
+snapshot `4f4eb80f`, tagged `hostinger-archive` and exempt from pruning.
 
 **Backup scope (the 2026-07-31 commitment):** 16 sites, **20.9 GB of files**,
 **~223 MB across 12 databases**.

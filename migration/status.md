@@ -112,14 +112,22 @@ Direct photo access is denied without a Piwigo session cookie — privacy
 protection for a family gallery. Verified the rule carried across byte-identical
 to the source, and that it keys on the cookie: 403 without, 200 with.
 
+## Closed 2026-07-30/31
+
+- **Offsite backups are live.** Not S3 — Cloudflare R2, in the existing DotAim
+  account, bucket `hetzner-dotaim-backups`, via restic. Nightly at 03:27 UTC,
+  weekly verification Sundays. First run and a full `check --read-data` both
+  passed. See `docs/runbook-backups.md`. This closes the last hard-deadline item.
+- **shamsaldhaher.com and billing.shamsaldhaher.com are archived.** The client
+  is not keeping either running, so both were captured and verified rather than
+  migrated: 7,754 and 71,291 files, dumps restore cleanly into MySQL 8.0.
+- **Three zones on Hostinger nameservers — closed by owner decision**
+  (2026-07-31). grand-emerald.com and nizonet.com do not depend on Hostinger
+  for hosting, and shamsaldhaher.com's client appears to be renewing the
+  domain. Not tracked further.
+
 ## Still open (not blockers)
 
-- **Backups are Hetzner-only.** The S3 push has not happened, so there is no
-  offsite copy. This is the largest outstanding risk.
-- **Three zones still on Hostinger nameservers:** grand-emerald.com,
-  nizonet.com, shamsaldhaher.com. The sites work; the zones have not moved.
-- **shamsaldhaher.com and billing.shamsaldhaher.com are not backed up**, by
-  earlier decision pending the migrate-or-not call.
 - **All FPM pools run as www-data**, so any compromised site can still read
   every other site's database credentials. See `docs/runbook-fpm.md`.
 - **Hostinger freezes remain in place** on every migrated site, deliberately.
@@ -147,9 +155,9 @@ Post/option counts and newest timestamp matched the frozen source exactly.
 **The Hostinger copy is still frozen (503) and should stay that way** — see
 rollback in the runbook, which requires lifting it.
 
-**Next, in order:** the S3 offsite push (the last hard-deadline item still
-open), then per-site FPM users, then moving the three remaining zones off
-Hostinger nameservers.
+**Next, in order:** per-site FPM users. Nothing else is outstanding — offsite
+backups landed 2026-07-30 and the remaining zone moves were dropped by owner
+decision.
 
 ## Do not delete from Hostinger yet
 
@@ -164,11 +172,18 @@ Safe to delete only once **all** of these hold:
 2. Mail for the domain does not touch Hostinger. Not an issue for the three
    live sites (GoDaddy/secureserver MX), but it **is** for nizonet.com, whose
    MX points at Hostinger.
-3. The backup set has been pushed to S3, so a copy exists somewhere that is
-   neither Hostinger nor the production box.
+3. The backup set exists somewhere that is neither Hostinger nor the production
+   box.
 
-Point 3 is currently false for everything. Until the S3 push happens, Hostinger
-*is* the second copy.
+**Point 3 became true on 2026-07-30.** The whole estate — every site, every
+database, and the Hostinger-era archive — is in Cloudflare R2, verified by a
+full `restic check --read-data`. Hostinger is no longer anyone's second copy,
+so deletion there is now gated only on points 1 and 2.
+
+The local copy of the Hostinger archive at `/var/www/backups/hostinger/synced`
+was deleted 2026-07-31 once that was verified. It survives in R2 as snapshot
+`4f4eb80f`, tagged `hostinger-archive`, which sits outside the nightly
+retention policy and is therefore never pruned.
 
 ## nizonet.com — zone changes
 
