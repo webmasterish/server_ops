@@ -1,0 +1,57 @@
+# Installed to /etc/restic/excludes.txt by scripts/install-restic.sh.
+#
+# Everything excluded here is either reproducible, already retained elsewhere,
+# or actively harmful to keep. Anything not listed IS backed up -- when in
+# doubt, leave it in. Storage is ~$0.015/GB-month; a missing file is a bad day.
+
+# ---------------------------------------------------------------------------
+# Apache per-site logs
+# ---------------------------------------------------------------------------
+# ~59 MB/day of fresh, already-compressed data that dedups against nothing, so
+# it would dominate the repo's growth -- roughly 1.8 GB/month, against a total
+# repo of ~20 GB. They already have 30 days of on-box history via
+# /etc/logrotate.d/vhosts, and they are operational data, not business data.
+# If that trade ever stops making sense, delete these four lines.
+/var/www/vhosts/*/*/logs/
+/var/www/vhosts/*/*/subs/*/logs/
+/var/log/apache2/
+
+# Application-level debug logs (WP_DEBUG_LOG and friends, e.g. videotizer's
+# theme log) are deliberately NOT excluded. They are small, they append rather
+# than churn so they deduplicate well, and they are diagnostics tied to the
+# site rather than to the web server.
+
+# ---------------------------------------------------------------------------
+# Caches and self-expiring application logs
+# ---------------------------------------------------------------------------
+**/content/cache/
+**/wp-content/cache/
+**/content/uploads/cache/
+
+# WooCommerce writes ~1.5 MB/day here and expires them itself after 30 days.
+**/content/uploads/wc-logs/
+
+# Matomo scratch space -- regenerated, and not readable by the site user
+# anyway (see the || true in install-logrotate.sh for the same directories).
+/var/www/vhosts/dotaim/dotaim.com/subs/analytics.dotaim.com/httpdocs/tmp/
+
+# ---------------------------------------------------------------------------
+# Reproducible build output
+# ---------------------------------------------------------------------------
+# Only things that a build step regenerates. Composer's vendor/ is NOT here:
+# a restore has to produce a running site without network access to Packagist,
+# and Invoice Ninja in the Hostinger archive will not boot without it.
+**/node_modules/
+**/.sass-cache/
+
+# ---------------------------------------------------------------------------
+# Never back up the keys to the backup destination
+# ---------------------------------------------------------------------------
+# Restoring is a chicken-and-egg problem if the only copy of the R2 credentials
+# is inside the repo they unlock. They belong in your credentials store, not
+# here. /root/.restic-pass is likewise deliberately absent.
+/etc/restic/
+
+# Transient dump files -- a .partial is a dump that was still being written
+# when the snapshot ran, i.e. truncated by definition.
+**/*.partial

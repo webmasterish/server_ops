@@ -1,0 +1,18 @@
+[Unit]
+Description=Nightly offsite backup
+
+[Timer]
+# 03:15 UTC -- measured trough in the access logs, and clear of the 00:00
+# logrotate run so the two are never competing for IO.
+OnCalendar=*-*-* 03:15:00
+
+# Spread the start so a fleet does not hit the same object store at once, and
+# so the wall-clock start is not a predictable target.
+RandomizedDelaySec=15m
+
+# If the box was down at 03:15, run on the next boot rather than skipping the
+# night entirely.
+Persistent=true
+
+[Install]
+WantedBy=timers.target

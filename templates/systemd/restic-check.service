@@ -1,0 +1,18 @@
+[Unit]
+Description=Verify the restic repository
+Documentation=file:///home/webmasterish/server_ops/docs/runbook-backups.md
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+EnvironmentFile=/etc/restic/restic.env
+ExecStart=/home/webmasterish/server_ops/scripts/restic-check.sh
+Nice=15
+IOSchedulingClass=idle
+CPUSchedulingPolicy=batch
+TimeoutStartSec=4h
+
+[Install]
+WantedBy=multi-user.target

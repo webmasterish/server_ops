@@ -1,0 +1,12 @@
+[Unit]
+Description=Weekly restic repository verification
+
+[Timer]
+# Sundays 05:00 UTC -- after the nightly backup has finished and pruned, so
+# check sees a settled repository.
+OnCalendar=Sun *-*-* 05:00:00
+RandomizedDelaySec=30m
+Persistent=true
+
+[Install]
+WantedBy=timers.target
