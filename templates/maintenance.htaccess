@@ -16,17 +16,30 @@
 #     back" signal. Crawlers retain the old page and retry.
 #
 # ALLOW_IP lets you keep testing the source while the public sees maintenance.
-# Replace with your own address, or drop the two RewriteCond lines to freeze it
-# for everyone including yourself.
+# Uncomment it and replace with your own address. Left out, the freeze is hard
+# and applies to everyone including yourself, which is what every cutover so
+# far has used.
+#
+# THE SENTINELS ARE NOT OPTIONAL. `resync-site.sh` strips the freeze from the
+# DESTINATION copy by deleting between the two markers, because the sync copies
+# .htaccess faithfully and a freeze that travels to Hetzner means the new site
+# serves 503 to everyone the moment DNS moves -- indistinguishable from a
+# failed migration. `audit-sites.sh` looks for the same marker. A block applied
+# without them is stripped by neither. Copy this file whole; do not retype the
+# rules and leave the markers off.
+#
+# The comment on the START line is free text -- date it, so a freeze left
+# behind on some site months from now can be dated at a glance.
 
+### MIGRATION-FREEZE-START -- added YYYY-MM-DD, remove this block to lift
 <IfModule mod_rewrite.c>
 	RewriteEngine On
 
 	# Let the maintenance page itself through, or the rule loops.
 	RewriteCond %{REQUEST_URI} !^/maintenance\.html$
 
-	# Your IP still sees the real site. Remove this line for a hard freeze.
-	RewriteCond %{REMOTE_ADDR} !^ALLOW_IP$
+	# Your IP still sees the real site. Uncomment for a soft freeze.
+	# RewriteCond %{REMOTE_ADDR} !^ALLOW_IP$
 
 	# `-` means no substitution: set the status and let ErrorDocument below
 	# serve the body. Rewriting to /maintenance.html instead would return the
@@ -41,3 +54,4 @@
 </IfModule>
 
 ErrorDocument 503 /maintenance.html
+### MIGRATION-FREEZE-END

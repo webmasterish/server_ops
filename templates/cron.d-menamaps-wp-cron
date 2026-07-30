@@ -1,0 +1,35 @@
+# menamaps.com -- system wp-cron.
+#
+# Installed to /etc/cron.d/menamaps-wp-cron. Owned by server_ops; see
+# docs/handover-menamaps-migration.md §3.
+#
+# WHY this site and no other: every other migrated site is brochure-ware, where
+# WordPress's page-load cron is sufficient -- a visitor arrives, due events run.
+# This one is a store. Action Scheduler, WooCommerce scheduled tasks and 15
+# pending actions travelled with the dump, and Action Scheduler's queue is
+# driven by cron rather than by traffic. On a low-traffic storefront, page-load
+# cron means the queue advances only when someone happens to visit.
+#
+# WordPress's own page-load cron is deliberately LEFT ENABLED as well. Disabling
+# it means setting DISABLE_WP_CRON in wp-config.php, which is a menamaps-repo
+# change, not a server one. Running both is harmless: WP takes a lock, so the
+# two paths cannot execute the same event twice.
+#
+# SERVER_NAME IS MANDATORY, not decoration. wp-config.php selects its config
+# file from it, and the CLI guard defaults to `localhost`, which matches no
+# config on this box. Without it WP-CLI boots with no database credentials and
+# queries SILENTLY DO NOTHING -- no error, no output, exit 0. A cron entry that
+# fails that way looks exactly like one that is working.
+#
+# /usr/bin/php8.5 is likewise explicit. WP-CLI's default interpreter here is
+# 8.3 (`wp --info`), while this site's pool and code run 8.5.
+
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+# Cron mails output on failure; with --quiet a healthy run is silent, so mail
+# only arrives when something is actually wrong. Leave MAILTO set to root
+# rather than empty -- an entry that fails every minute in silence is worse
+# than one that is noisy.
+MAILTO=root
+
+* * * * * www-data SERVER_NAME=menamaps.com /usr/bin/php8.5 /usr/local/bin/wp --path=/var/www/vhosts/dotaim/menamaps.com/httpdocs/cms cron event run --due-now --quiet
