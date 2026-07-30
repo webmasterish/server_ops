@@ -26,8 +26,22 @@
 # pm=ondemand by default: idle sites hold no workers at all, which matters on
 # a 3.7 GB box hosting a dozen-odd mostly-quiet sites. Override with PM=dynamic
 # for a busy site.
+#
+# PER-SITE php_admin_value OVERRIDES: if templates/fpm-limits/<domain>.conf
+# exists it is appended verbatim to the generated pool. That file is the ONLY
+# supported way to give a site non-default limits.
+#
+# Editing the pool by hand does not survive: this script rewrites the file from
+# the template on every run, and the pool header says so. The same shape of bug
+# already cost this estate once -- provision-site.sh silently destroying the
+# PHP handler block on rewrite, which left lebanese.tech serving 7.4 over HTTPS
+# and 8.3 over HTTP at the same moment. Overrides that live in the repo get
+# reapplied; overrides typed into a pool file get lost at the next re-run, and
+# the loss is invisible until something OOMs.
 
 set -euo pipefail
+
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 GROUP="${1:?usage: $0 <group> <domain> <php-version> [--sub <parent>]}"
 DOMAIN="${2:?usage: $0 <group> <domain> <php-version> [--sub <parent>]}"
@@ -113,6 +127,17 @@ php_admin_value[open_basedir] = ${DOCROOT}:/tmp:/usr/share/php:/var/lib/php/sess
 php_admin_value[upload_tmp_dir] = /tmp
 php_admin_value[session.save_path] = /var/lib/php/sessions
 POOLCONF
+
+# Per-site limit overrides, if this site has any. Appended last so they win
+# over anything above. Absent file = stock limits, which is every site so far
+# except menamaps.com.
+LIMITS="${HERE}/../templates/fpm-limits/${DOMAIN}.conf"
+if [[ -f "${LIMITS}" ]]; then
+  log "applying per-site limits from templates/fpm-limits/${DOMAIN}.conf"
+  { echo; echo "; --- per-site overrides: templates/fpm-limits/${DOMAIN}.conf ---"; \
+    cat "${LIMITS}"; } | sudo tee -a "${POOL}" >/dev/null
+  grep -E '^php_admin_value' "${LIMITS}" | sed 's/^/         /'
+fi
 
 # ---------------------------------------------------------------------------
 # Vhost wiring
