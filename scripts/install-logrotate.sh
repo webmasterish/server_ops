@@ -11,7 +11,7 @@
 #
 # --force-rotate additionally runs the rotation immediately. That is what
 # reclaims the accumulated space. It COMPRESSES rather than discards -- the
-# data survives as .log.1.gz and is pruned after 14 days by the normal cycle.
+# data survives as .log.1.gz and is pruned after 30 days by the normal cycle.
 #
 # Idempotent. Backs up any existing rule before overwriting.
 
@@ -23,6 +23,14 @@ FORCE=0
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SRC="${HERE}/../templates/logrotate-vhosts.conf"
 DST=/etc/logrotate.d/vhosts
+
+# NOT alongside DST. logrotate reads *every* file in /etc/logrotate.d/ with no
+# extension filter, so a .bak left in there is parsed as a second live rule
+# covering the same globs. logrotate then reports "duplicate log entry",
+# skips that file, and exits 1 -- which makes logrotate.service fail every
+# night even though the rotations themselves succeeded. That is exactly what
+# happened on 2026-07-29; the unit was in `failed` state until 2026-07-30.
+BAK_DIR=/var/backups/logrotate
 
 [[ -f "${SRC}" ]] || { echo "missing template: ${SRC}" >&2; exit 1; }
 
@@ -40,10 +48,21 @@ before=$(log_gb '*.log')
 log "vhost logs currently: ${before} GB"
 
 if [[ -f "${DST}" ]]; then
-  bak="${DST}.bak-$(date +%F-%H%M%S)"
+  sudo mkdir -p "${BAK_DIR}"
+  bak="${BAK_DIR}/vhosts.$(date +%F-%H%M%S)"
   log "backing up existing rule to ${bak}"
   sudo cp "${DST}" "${bak}"
 fi
+
+# Sweep up any backup left in the config directory by an earlier version of
+# this script, which wrote them next to DST. Moved rather than deleted, and
+# only files matching the name this script itself generated.
+while IFS= read -r stray; do
+  [[ -n "${stray}" ]] || continue
+  sudo mkdir -p "${BAK_DIR}"
+  log "relocating stray config-dir backup: $(basename "${stray}")"
+  sudo mv "${stray}" "${BAK_DIR}/$(basename "${stray}")"
+done < <(sudo find /etc/logrotate.d -maxdepth 1 -name 'vhosts.bak-*' 2>/dev/null || true)
 
 log "installing ${DST}"
 sudo install -o root -g root -m 644 "${SRC}" "${DST}"
