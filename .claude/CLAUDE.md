@@ -34,8 +34,11 @@ Two items to resolve before anything else:
 
 ## Conventions
 
-- Server docroots: `/var/www/<domain>/httpdocs` — mirrors the local
-  layout at `/media/data2/www/localhost/subs/<project>/httpdocs`.
+- Server docroots: `/var/www/vhosts/<group>/<domain>/httpdocs` (e.g.
+  `/var/www/vhosts/dotaim/grand-emerald.com/httpdocs`) — mirrors the
+  local layout at `/media/data2/www/localhost/subs/<project>/httpdocs`.
+  Each site also has `config/` (vhost.conf, vhost-ssl.conf, symlinked
+  into `/etc/apache2/sites-enabled/`) and `logs/` alongside `httpdocs`.
 - One PHP-FPM pool per site.
 - Certs via certbot. WordPress managed with wp-cli.
 - Outbound WordPress mail goes through an SMTP relay, never the VPS
