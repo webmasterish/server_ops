@@ -1,6 +1,21 @@
-# Migration status
+# Migration status — CLOSED
 
-Updated 2026-07-30. Hetzner is `91.99.146.221`. Hostinger is `82.25.96.229`.
+**Closed 2026-08-09. The Hostinger account is gone, everything worth keeping
+was backed up before it went, and there is nothing left to do.**
+
+Mailboxes were **deliberately abandoned**. The backup tooling
+(`docs/runbook-mail-backup.md`, `scripts/backup-hostinger-mail.sh`) was
+written on 2026-08-01 and never run, and that is the intended outcome, not an
+oversight — the owner decided the mail was not worth keeping. Both files were
+removed in the same commit as this note; they are in git history at `6a2ff79`
+if the record is ever wanted. **Do not resurface this as an open item.**
+
+Everything below is historical record of how the migration went. Nothing in
+it is actionable.
+
+---
+
+Updated 2026-07-30. Hetzner is `91.99.146.221`. Hostinger was `82.25.96.229`.
 
 **All 15 sites are live on Hetzner.** menamaps.com cut over 2026-07-30; phases 1
 and 2 are complete and the handback list in

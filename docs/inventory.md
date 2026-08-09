@@ -1,14 +1,21 @@
 # Infrastructure Inventory
 
-Compiled 2026-07-28. Read-only audit; nothing was changed on either server.
+Compiled 2026-07-28. Section 3 (`hetzner`) re-measured and corrected
+2026-08-09 and is the only part still describing anything live.
 
-Deadline reminder: by **2026-07-31** we need (a) complete verified backups
-of everything on Hostinger and (b) DNS off Hostinger nameservers.
-That is **3 days** from this audit.
+**Sections 1, 2 and 4 are CLOSED and historical — 2026-08-09.** The Hostinger
+account is gone, everything worth keeping was backed up before it went, and
+the migration is finished. Every item flagged in those sections is resolved or
+was deliberately dropped, including the mailboxes in §1.4 and §2.3, which were
+abandoned on purpose. Nothing in them is actionable; they are kept as the
+record of what was there and how it moved. **Do not reopen them.**
+
+The deadline that framed this document (2026-07-31: verified backups off
+Hostinger, DNS off Hostinger nameservers) was met and has passed.
 
 ---
 
-## 1. Hostinger — account inventory
+## 1. Hostinger — account inventory  *(CLOSED — historical)*
 
 **Account:** `u918436082` on `de-fra-web1973.main-hosting.eu`
 **Stack:** LiteSpeed + CloudLinux (PHP selector), MariaDB **11.8.8**
@@ -122,7 +129,7 @@ database dump, so they were never at risk either. menamaps.com now has a
 `docs/handover-menamaps-migration.md` §3 — but that is a new addition for a
 store with Action Scheduler, not a Hostinger job being reproduced.
 
-### 1.4 Mailboxes — NOT ENUMERABLE (and deferred)
+### 1.4 Mailboxes — CLOSED, deliberately abandoned 2026-08-09
 
 No `~/mail` or `~/Maildir` on the filesystem; Hostinger mail runs on separate
 infrastructure and is managed in hPanel. Mailbox lists, aliases and forwarders
@@ -172,7 +179,7 @@ Do not try to reconstruct that context here.
 
 ---
 
-## 2. DNS, mail and registrars
+## 2. DNS, mail and registrars  *(CLOSED — historical)*
 
 ### 2.1 Full DNS table
 
@@ -196,7 +203,7 @@ Do not try to reconstruct that context here.
 | webmasterish.com | GoDaddy | GoDaddy (secureserver) | GoDaddy |
 | woo.lushlebanon.com | (lushlebanon.com zone → Cloudflare) | Zoho (parent) | SafeNames (parent) |
 
-### 2.2 FLAGGED — zones on Hostinger nameservers
+### 2.2 CLOSED — zones moved off Hostinger nameservers
 
 Three zones must move to Cloudflare before 2026-07-31:
 
@@ -208,7 +215,7 @@ All three use `ns1.dns-parking.com` / `ns2.dns-parking.com`, which is
 Hostinger's nameserver service. If the plan lapses these zones stop resolving
 and the sites go dark regardless of where the files live.
 
-### 2.3 FLAGGED — live Hostinger mailboxes
+### 2.3 CLOSED — Hostinger mailboxes, deliberately abandoned 2026-08-09
 
 Five domains have MX pointing at `mx1.hostinger.com` / `mx2.hostinger.com`:
 
@@ -233,7 +240,7 @@ Revisit mailbox migration when the mail subscription approaches expiry.
 
 `skinosis.com` has **no MX at all** — worth confirming that is intentional.
 
-### 2.4 FLAGGED — domains registered through Hostinger
+### 2.4 CLOSED — domains registered through Hostinger
 
 - **nizonet.com**
 - **shamsaldhaher.com**
@@ -370,7 +377,7 @@ certbot now manages **17** certificates, all valid, soonest
 `analytics.dotaim.com` at 2026-09-24. `certbot.timer` runs twice daily.
 The July figure of three certificates predates the migration.
 
-### 3.5 Backups — FLAGGED
+### 3.5 Backups — RESOLVED (see docs/runbook-backups.md)
 
 - `/var/www/backups/do-dotaim/` — 1.3 G, 7 files. **Cleared for deletion
   2026-07-28** — see the assessment below.
@@ -457,9 +464,10 @@ allow-list the Hetzner address.
 
 ---
 
-## 4. Blockers and risks
+## 4. Blockers and risks  *(CLOSED — all resolved or dropped)*
 
-Ordered by how much they threaten the 2026-07-31 deadline.
+Ordered by how much they threatened the 2026-07-31 deadline, which was met.
+Every blocker below is closed. Kept as record; none are actionable.
 
 ### B1 — No backup exists yet, and there are 3 days left  *(critical)*
 
