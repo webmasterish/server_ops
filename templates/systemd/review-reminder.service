@@ -1,0 +1,15 @@
+[Unit]
+Description=Monthly review reminder (health check + audit + quarterly restore drill)
+Documentation=file:///home/webmasterish/server_ops/docs/runbook-health-checks.md
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+ExecStart=/home/webmasterish/server_ops/scripts/review-reminder.sh
+TimeoutStartSec=2m
+Nice=10
+
+[Install]
+WantedBy=multi-user.target

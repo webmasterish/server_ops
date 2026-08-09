@@ -1,0 +1,34 @@
+[Unit]
+Description=Daily machine health check (backups, capacity, services, certs)
+Documentation=file:///home/webmasterish/server_ops/docs/runbook-health-checks.md
+# Needs the network to reach R2 for the snapshot-freshness check, which is the
+# only check in the script that leaves the box.
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+
+# Holds RESTIC_REPOSITORY, RESTIC_PASSWORD_FILE and the R2 keys, so the check
+# can ask the repository how old its newest snapshot is. Read-only use here --
+# the script never writes to the repository.
+EnvironmentFile=/etc/restic/restic.env
+
+ExecStart=/home/webmasterish/server_ops/scripts/health-check.sh
+
+# Exit 2 means WARN: degraded, worth looking at this week, but not a failure
+# of the check itself. Declaring it successful keeps `systemctl --failed`
+# meaning "the check could not run", which is a different problem from "the
+# check ran and found something".
+SuccessExitStatus=2
+
+# One R2 list call and some /proc reads. If it has not finished in two minutes
+# the network is the problem, and hanging forever would hold the timer.
+TimeoutStartSec=2m
+
+Nice=10
+IOSchedulingClass=idle
+
+[Install]
+WantedBy=multi-user.target

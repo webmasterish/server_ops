@@ -1,0 +1,20 @@
+[Unit]
+Description=Daily machine health check
+
+[Timer]
+# 06:30 UTC. Deliberately downstream of everything it inspects: the backup
+# starts 03:15 (+15m jitter, ~12min run), the Sunday repo check starts 05:00,
+# logrotate runs 00:00. Checking at 06:30 means a failure in any of them is
+# reported the same morning rather than a day late.
+OnCalendar=*-*-* 06:30:00
+
+# Small: unlike the backup there is no object-store thundering herd to avoid,
+# and a tighter window keeps the report time predictable.
+RandomizedDelaySec=5m
+
+# If the box was down at 06:30, check on the next boot. A machine that just
+# came back up is exactly when you want the check to run.
+Persistent=true
+
+[Install]
+WantedBy=timers.target

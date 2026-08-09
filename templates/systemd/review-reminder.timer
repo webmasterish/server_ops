@@ -1,0 +1,18 @@
+[Unit]
+Description=Monthly review reminder
+
+[Timer]
+# 09:00 UTC on the 1st. Deliberately mid-morning rather than alongside the
+# 06:30 health check: a reminder that arrives in the same batch as the daily
+# check gets read as part of it and dismissed with it. This one is asking for
+# 15 minutes of attention, so it should arrive on its own.
+OnCalendar=*-*-01 09:00:00
+
+RandomizedDelaySec=15m
+
+# If the box was down on the 1st, remind on the next boot rather than skipping
+# the month. Missing a monthly chore entirely is the failure mode here.
+Persistent=true
+
+[Install]
+WantedBy=timers.target
