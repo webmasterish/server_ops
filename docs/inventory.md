@@ -251,36 +251,62 @@ a lapsed registration is unrecoverable in a way a lapsed hosting plan is not.
 
 ## 3. Hetzner — current state
 
-**Host:** `hetzner-dotaim`, Hetzner CPX21, Ubuntu **24.04.3 LTS**
-**Uptime:** 333 days
-**Access:** SSH key, passwordless sudo available
+**Host:** `hetzner-dotaim`, Hetzner CPX21, Ubuntu **24.04.4 LTS**
+**Access:** SSH key only — password auth disabled 2026-08-09 (see 3.6)
 
-### 3.1 Capacity
+### 3.1 Capacity  *(re-measured 2026-08-09)*
 
-| Resource | Value |
-|----------|-------|
-| Disk | 75 G total, 26 G used, **47 G available** (36%) |
-| RAM | 3.7 G total, 1.8 G used, **1.9 G available** |
-| Swap | **none configured** |
+| Resource | 2026-07-28 | **2026-08-09** |
+|----------|-----------|----------------|
+| Disk | 26 G used, 47 G available (36%) | 33 G used, **40 G available** (45%) |
+| RAM | 3.7 G total, 1.9 G available | 3.7 G total, ~2.3 G available |
+| Swap | **none configured** | **2 G swapfile** |
+| CPU | — | ~86% idle daily average, load ~0.5 on 3 vCPU |
 
-Top memory consumers: mysqld 18.8%, redis 5.6%, apache2 workers ~1.7% each.
+Growth is `/var/www/vhosts` at 18 G, of which per-site Apache logs run
+~71 MB/day (see `templates/logrotate-vhosts.conf`). Top memory consumer is
+still mysqld (~554 MB).
 
-### 3.2 Stack — two remaining gaps vs CLAUDE.md
+### 3.2 Stack  *(corrected 2026-08-09 — the 3.2 gaps are now closed)*
 
 | Component | Documented | **Actual** |
 |-----------|-----------|------------|
-| Web server | Apache | **Apache 2.4.58** — matches (CLAUDE.md corrected 2026-07-28) |
-| PHP handler | PHP-FPM, one pool per site | **mod_php** (`php_module` loaded; `proxy_fcgi` is **not**) |
-| Docroot | `/var/www/<domain>/httpdocs` | `/var/www/vhosts/<group>/<domain>/httpdocs` |
+| Web server | Apache | **Apache 2.4.58**, MPM **event**, `MaxRequestWorkers 150` |
+| PHP handler | PHP-FPM, one pool per site | **matches** — `proxy_fcgi`, 15 pools |
+| Docroot | `/var/www/vhosts/<group>/<domain>/httpdocs` | matches |
 
-`php8.3-fpm.service` is running but Apache is not wired to it — there is no
-`proxy_fcgi` module, and only the stock `www.conf` pool exists
-(`pm = dynamic`, `pm.max_children = 5`). The "one PHP-FPM pool per site"
-convention is currently aspirational, not implemented.
+The July note that FPM was "aspirational, not implemented" is **obsolete**.
+Apache runs `proxy_fcgi` against 15 per-site pools across three PHP versions.
 
-Also installed/running: MySQL **8.0.46** (not MariaDB), Redis, Docker
-(**no containers running**), fail2ban, certbot, wp-cli 2.12.0.
-PHP **8.3.6 only** — no 8.2 or 7.4.
+PHP **7.4, 8.3 and 8.5** are installed (8.5.9 as of 2026-08-09), not 8.3 only.
+Pool sizing was rebalanced 2026-08-09 — see `scripts/tune-fpm-pools.sh` and
+`docs/runbook-health-checks.md`; `sum(pm.max_children)` is **63**, deliberately
+held under RAM+swap.
+
+Also installed/running: MySQL **8.0.46** (not MariaDB), Redis **8.2.1**, Docker
+(**no containers running**; held at 28.3.3 via `apt-mark hold`, as is Redis),
+fail2ban, certbot, wp-cli, msmtp.
+
+**No MTA and no SMTP relay.** Contrary to the CLAUDE.md convention line
+("outbound WordPress mail goes through an SMTP relay"), as of 2026-08-09 the
+box had no postfix/exim/sendmail, no `sendmail_path`, no SMTP plugin in any
+site and no SMTP constants in any `wp-config.php`. Nothing here could send
+mail at all. `msmtp` was installed 2026-08-09 for alerting only and is not
+wired to WordPress. **CLAUDE.md still needs correcting on this point.**
+
+### 3.2b WordPress layout — all installs live at `/cms`
+
+All **ten** WordPress sites keep WordPress in a `cms/` subdirectory of the
+docroot, not at the root: ayatalquran, dotaim.com, grand-emerald, hirement,
+lebanese.tech, menamaps, nidaldirani, skinosis, videotizer, singlefunction.
+`/wp-login.php` 302-redirects to `/cms/wp-login.php`.
+
+This is load-bearing, not incidental. It is why ~5,000 automated login POSTs a
+day hit `/wp-login.php` and never reach WordPress (scanners hardcode the root
+path and do not follow the redirect), and it is the precondition for the
+origin block in 3.6. **Re-check it before adding a site that breaks the
+pattern** — `scripts/install-block-wp-probes.sh` refuses to install if any
+site serves WordPress from its document root.
 
 ### 3.3 Existing vhosts
 
@@ -338,11 +364,11 @@ Undecided pending the migrate/don't-migrate call: `shamsaldhaher.com` and
 `billing.shamsaldhaher.com` (would presumably be their own `shamsaldhaher`
 group if they land at all).
 
-### 3.4 TLS
+### 3.4 TLS  *(updated 2026-08-09)*
 
-certbot manages three certificates, all valid to **2026-09-24** (58 days):
-`analytics.dotaim.com`, `ayatalquran.com`, `dotaim.com`.
-`/etc/cron.d/certbot` is present, so renewal is automated.
+certbot now manages **17** certificates, all valid, soonest
+`analytics.dotaim.com` at 2026-09-24. `certbot.timer` runs twice daily.
+The July figure of three certificates predates the migration.
 
 ### 3.5 Backups — FLAGGED
 
@@ -392,6 +418,42 @@ Zero-risk alternative if there is any hesitation: delete only the uncompressed
 `.sql` files that already have a `.bz2` twin — `dotaim_analytics_matomo_..._latest.sql`
 (578 MB) and `dotaim_website_wp_....sql` (483 KB). That frees ~579 MB and loses
 nothing at all, since the bz2 holds identical data.
+
+### 3.6 Monitoring and hardening  *(added 2026-08-09)*
+
+Full detail in `docs/runbook-health-checks.md`. Summary of what now exists on
+the box and what changed:
+
+| What | State |
+|---|---|
+| `health-check.timer` | daily 06:30 UTC, 25 checks, silent unless something is wrong |
+| `review-reminder.timer` | 1st of month 09:00 UTC, prompts monthly review + quarterly restore drill |
+| Alert channel | ntfy push, `/etc/health-check/notify` (0700 root); topic is a credential, never printed |
+| SSH | **password auth disabled**; `maxauthtries 4`, `logingracetime 30`, `maxstartups 10:30:60` |
+| Real client IPs | `mod_remoteip` + Cloudflare ranges — logs had been recording edge IPs |
+| FPM sizing | `sum(pm.max_children)` 111 → **63** |
+| WP probe blocks | origin-side deny: POST to root `/wp-login.php`, plus `xmlrpc.php` and `wp-config.php` anywhere |
+
+Two facts worth carrying forward:
+
+**Logs before 2026-08-09 16:21 UTC contain Cloudflare edge IPs, not client
+IPs.** `mod_remoteip` was not configured until then. Anything that parses log
+history — abuse reports, Matomo log import, per-IP analysis — sees a hard
+boundary at that timestamp. Do not treat pre-boundary IPs as visitors.
+
+**Origin firewall rules cannot ban real clients.** Traffic arrives from
+Cloudflare's IPs, so iptables/fail2ban sees Cloudflare, not the attacker.
+Banning the observed IP would blackhole the CDN. `mod_remoteip` fixed the
+*logs*, not the *packets*. Blocking abusive clients has to happen at the
+Cloudflare edge, or via Apache `Require`/`LocationMatch` rules which do see
+the corrected IP.
+
+Email alerting is built but unfinished: `scripts/install-notify-email.sh`
+targets dev@dotaim.com via Google Workspace, and `/etc/msmtprc` holds a 0600
+skeleton. It is blocked on a Google **App Password**, which the Workspace
+account cannot currently issue. The alternative is the Workspace SMTP relay
+(`smtp-relay.gmail.com`), which authenticates by IP and needs an admin to
+allow-list the Hetzner address.
 
 ---
 
