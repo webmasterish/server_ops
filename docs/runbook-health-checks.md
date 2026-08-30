@@ -392,3 +392,74 @@ nobody can prove happened.
 | `svc/*` down | `systemctl status <unit>` then `journalctl -u <unit> -n 50`. |
 | `ssh/passwordauth` | Something re-enabled it. `sudo sshd -T \| grep -i password`, then check `/etc/ssh/sshd_config.d/`. |
 | `fpm/headroom` | A pool was added. Either lower `pm.max_children` on the new pool or accept it deliberately. |
+| `reboot` | A kernel update is waiting and nothing will apply it but you. See "Rebooting hetzner" below. |
+
+## Rebooting hetzner
+
+The `reboot` check WARNs at 7 days pending (`REBOOT_WARN_D=7`). Nothing clears
+it automatically — `unattended-upgrades` has `Automatic-Reboot` commented out
+deliberately, so the box never reboots itself under traffic.
+
+**Order matters, and it is decided by one question: is a kernel, libc or
+systemd update also pending?**
+
+```
+apt list --upgradable 2>/dev/null | grep -E 'linux-image|linux-generic|libc6|systemd'
+```
+
+- **Nothing returned** → reboot **first**, patch after. The reboot is then the
+  only variable, so if a site comes back wrong you know exactly what caused it.
+  None of the remaining updates will ask for a second reboot.
+- **Something returned** → patch first, then one reboot covers everything.
+
+### The procedure
+
+Baseline first — this is the comparison that makes the verification meaningful.
+All sites must be captured *before* the reboot. Note the `--resolve`: curl from
+the box to a public hostname gets a 403 from the Cloudflare edge, so the origin
+must be addressed directly.
+
+```
+for d in ayatalquran.com dotaim.com grand-emerald.com hirement.com \
+         lamarkazia.com lebanese.tech menamaps.com nidaldirani.com \
+         nizonet.com sasf-ksa.com skinosis.com videotizer.com \
+         mardini.net singlefunction.com webmasterish.com \
+         analytics.dotaim.com memories.mardini.net; do
+  printf '%-26s %s\n' "$d" \
+    "$(curl -k -s -o /dev/null -w '%{http_code}' \
+        --resolve "$d:443:127.0.0.1" --max-time 15 "https://$d/")"
+done
+```
+
+Expected: 16 × `200`, and `memories.mardini.net` → `302`. That 302 is its
+normal state, not a fault.
+
+Then check Redis before restarting it. It holds ~500k keys, but they are
+WordPress object-cache entries (`<site>_wp:post-queries:*`) with RDB
+persistence on and AOF off — regenerable, and saved on clean shutdown. Confirm
+that is still what is in there rather than assuming:
+
+```
+sudo redis-cli -n 1 --scan --count 200 | head -5
+sudo redis-cli info persistence | grep -E 'aof_enabled|rdb_last_save_time'
+```
+
+Reboot, then re-run the same baseline loop and compare. Also confirm:
+
+```
+test -f /var/run/reboot-required && echo STILL PENDING || echo CLEARED
+systemctl --failed
+sudo /home/webmasterish/server_ops/scripts/health-check.sh
+```
+
+Downtime measured on 2026-08-30 was **under a minute** — SSH answered on the
+first 10-second poll.
+
+### Two results that look alarming and are not
+
+- **`systemctl is-enabled ssh` returns `disabled`.** Correct on 24.04.
+  SSH is socket-activated: `ssh.socket` is enabled, `ssh.service` is not.
+  Check `ssh.socket` before concluding you are about to lock yourself out.
+- **`mariadb` is `not-found`.** The database is MySQL 8.0.46 —
+  `mysql.service`. The MariaDB names in this repo refer to *Hostinger's*
+  engine, which is what `scripts/sanitize-mariadb-dump.sh` converts **from**.

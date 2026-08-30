@@ -294,12 +294,13 @@ Also installed/running: MySQL **8.0.46** (not MariaDB), Redis **8.2.1**, Docker
 (**no containers running**; held at 28.3.3 via `apt-mark hold`, as is Redis),
 fail2ban, certbot, wp-cli, msmtp.
 
-**No MTA and no SMTP relay.** Contrary to the CLAUDE.md convention line
-("outbound WordPress mail goes through an SMTP relay"), as of 2026-08-09 the
-box had no postfix/exim/sendmail, no `sendmail_path`, no SMTP plugin in any
-site and no SMTP constants in any `wp-config.php`. Nothing here could send
-mail at all. `msmtp` was installed 2026-08-09 for alerting only and is not
-wired to WordPress. **CLAUDE.md still needs correcting on this point.**
+**No MTA and no SMTP relay.** As of 2026-08-09 the box had no
+postfix/exim/sendmail, no `sendmail_path`, no SMTP plugin in any site and no
+SMTP constants in any `wp-config.php`. Nothing here could send mail at all.
+`msmtp` was installed 2026-08-09 for alerting only and is not wired to
+WordPress. CLAUDE.md used to claim the opposite ("outbound WordPress mail goes
+through an SMTP relay"); that was **corrected in `3e3446b`**, so the two now
+agree.
 
 ### 3.2b WordPress layout — all installs live at `/cms`
 
@@ -314,6 +315,48 @@ path and do not follow the redirect), and it is the precondition for the
 origin block in 3.6. **Re-check it before adding a site that breaks the
 pattern** — `scripts/install-block-wp-probes.sh` refuses to install if any
 site serves WordPress from its document root.
+
+### 3.2c OS updates, kernel and Ubuntu Pro  *(added 2026-08-30)*
+
+Kernel is **6.8.0-138-generic** as of 2026-08-30. It was installed by
+unattended-upgrades on 2026-08-22 and activated by a reboot on 2026-08-30 —
+see `docs/runbook-health-checks.md` for the reboot procedure.
+
+`unattended-upgrades` runs daily and applies the Ubuntu archive
+(`noble-updates` / `noble-security`) only. **`Automatic-Reboot` is commented
+out**, so a kernel update leaves `/var/run/reboot-required` in place
+indefinitely and nothing clears it but a person. That is what the
+health-check `reboot` row is for: it stays OK for the first 6 days and WARNs
+from day 7 (`REBOOT_WARN_D=7`).
+
+**The MOTD update counts are misleading — do not act on them directly.**
+
+- "*N* updates can be applied immediately" counts **every** configured repo,
+  including the third-party ones (Docker, sury PHP, Redis, NodeSource). It is
+  not a count of Ubuntu security patches. On 2026-08-30, after every single
+  Ubuntu-archive update had been applied, it still read 17.
+- "34 additional security updates can be applied with ESM Apps" requires
+  **Ubuntu Pro**, which is deliberately **not attached** (`pro status` →
+  `attached: False`). This number does not decrease by applying updates and
+  will sit there permanently until Pro is attached. Attaching it changes what
+  unattended-upgrades pulls, so it is a decision, not a chore.
+- The count also moves on its own: a stale apt cache made it read 16, and a
+  plain `apt-get update` moved it to 34 with no packages installed.
+
+To see what is actually pending from Ubuntu rather than from a vendor repo:
+
+```
+apt list --upgradable 2>/dev/null | grep -E '/noble-(updates|security) '
+```
+
+**Held packages** (`apt-mark showhold`) — 9, all deliberate: `docker-ce`,
+`docker-ce-cli`, `docker-ce-rootless-extras`, `docker-buildx-plugin`,
+`docker-compose-plugin`, `containerd.io`, `redis`, `redis-server`,
+`redis-tools`. Docker runs **no containers**; Redis backs the WordPress object
+cache and its major upgrades want a deliberate window.
+
+`open-vm-tools` is installed but is a **VMware** guest agent on a KVM host —
+dead weight, and a removal candidate alongside Docker.
 
 ### 3.3 Existing vhosts
 
