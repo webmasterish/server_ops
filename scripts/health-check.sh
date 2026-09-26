@@ -417,12 +417,28 @@ check_certs() {
 }
 
 check_reboot() {
+  # The flag file's mtime is not when the reboot became pending: every later
+  # package that wants a reboot rewrites it. On 2026-09-25 a new kernel landed
+  # on a reboot already 13 days overdue, the age reset to 0, and the next
+  # morning's check reported OK. So remember when we first saw the flag, and
+  # only forget it once the flag is gone. A timestamp older than the current
+  # boot is from a pending reboot that has since happened, not this one.
+  local since_file=/var/lib/health-check/reboot-pending-since
   if [[ ! -f /var/run/reboot-required ]]; then
+    rm -f "${since_file}"
     ok "reboot" "not required"
     return
   fi
-  local age_d pkgs
-  age_d=$(( ( $(date +%s) - $(stat -c %Y /var/run/reboot-required) ) / 86400 ))
+  local now boot since age_d pkgs
+  now=$(date +%s)
+  boot=$(( now - $(cut -d. -f1 /proc/uptime) ))
+  since=$(cat "${since_file}" 2>/dev/null || true)
+  if [[ ! "${since}" =~ ^[0-9]+$ ]] || (( since < boot )); then
+    since=$(stat -c %Y /var/run/reboot-required)
+    mkdir -p "${since_file%/*}"
+    echo "${since}" > "${since_file}"
+  fi
+  age_d=$(( ( now - since ) / 86400 ))
   pkgs=$(tr '\n' ' ' < /var/run/reboot-required.pkgs 2>/dev/null | head -c 100)
   if (( age_d >= REBOOT_WARN_D )); then
     warn "reboot" "pending ${age_d}d: ${pkgs}"

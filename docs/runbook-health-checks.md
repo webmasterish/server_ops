@@ -400,6 +400,14 @@ The `reboot` check WARNs at 7 days pending (`REBOOT_WARN_D=7`). Nothing clears
 it automatically — `unattended-upgrades` has `Automatic-Reboot` commented out
 deliberately, so the box never reboots itself under traffic.
 
+The age is counted from when the check **first saw** the flag, kept in
+`/var/lib/health-check/reboot-pending-since` — not from the flag file's mtime.
+Every later package that wants a reboot rewrites that file, so the mtime
+restarts the clock: on 2026-09-25 a new kernel landed on a reboot already 13
+days overdue, the age reset to 0, and the check went quiet for a week it should
+have spent warning. The state file is removed once the flag is gone, and a
+timestamp older than the current boot is discarded.
+
 **Order matters, and it is decided by one question: is a kernel, libc or
 systemd update also pending?**
 
