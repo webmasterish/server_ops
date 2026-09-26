@@ -285,7 +285,7 @@ still mysqld (~554 MB).
 The July note that FPM was "aspirational, not implemented" is **obsolete**.
 Apache runs `proxy_fcgi` against 15 per-site pools across three PHP versions.
 
-PHP **7.4, 8.3 and 8.5** are installed (8.5.9 as of 2026-08-09), not 8.3 only.
+PHP **7.4, 8.3 and 8.5** are installed (8.5.11 as of 2026-09-26), not 8.3 only.
 Pool sizing was rebalanced 2026-08-09 — see `scripts/tune-fpm-pools.sh` and
 `docs/runbook-health-checks.md`; `sum(pm.max_children)` is **63**, deliberately
 held under RAM+swap.
@@ -318,16 +318,25 @@ site serves WordPress from its document root.
 
 ### 3.2c OS updates, kernel and Ubuntu Pro  *(added 2026-08-30)*
 
-Kernel is **6.8.0-138-generic** as of 2026-08-30. It was installed by
-unattended-upgrades on 2026-08-22 and activated by a reboot on 2026-08-30 —
-see `docs/runbook-health-checks.md` for the reboot procedure.
+Kernel is **6.8.0-142-generic** as of 2026-09-26. It was installed by
+unattended-upgrades on 2026-09-25 and activated by a reboot on 2026-09-26
+(previous: 6.8.0-138, rebooted 2026-08-30) — see
+`docs/runbook-health-checks.md` for the reboot procedure. The 2026-09-26
+reboot was ~14 days overdue because the health check's pending-age counter
+reset when the new kernel rewrote the flag file; that is fixed (see the
+runbook).
 
 `unattended-upgrades` runs daily and applies the Ubuntu archive
 (`noble-updates` / `noble-security`) only. **`Automatic-Reboot` is commented
 out**, so a kernel update leaves `/var/run/reboot-required` in place
 indefinitely and nothing clears it but a person. That is what the
 health-check `reboot` row is for: it stays OK for the first 6 days and WARNs
-from day 7 (`REBOOT_WARN_D=7`).
+from day 7 (`REBOOT_WARN_D=7`), counted from when the check first saw the flag.
+
+Vendor packages are never auto-applied, but point releases within the same
+major are applied by hand after checking what uses them — on 2026-09-26, PHP
+8.5.9 → 8.5.11 (menamaps.com only) and Node 24.19 → 24.21 (CLI only, no
+service). The Docker and Redis holds stay: those upgrades are major jumps.
 
 **The MOTD update counts are misleading — do not act on them directly.**
 

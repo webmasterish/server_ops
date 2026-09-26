@@ -7,7 +7,7 @@ only 8.3; 7.4 and 8.5 come from the `ondrej/php` PPA.
 |---|---|---|
 | 7.4.33 | ondrej PPA | lebanese.tech, singlefunction.com |
 | 8.3.6 | Ubuntu | everything else, and the CLI default |
-| 8.5.8 | ondrej PPA | menamaps.com |
+| 8.5.11 | ondrej PPA | menamaps.com (as of 2026-09-26) |
 
 Local dev runs **8.5.7**, which is why sites can throw fatals locally that do
 not occur in production. A local error is not evidence of a migration problem
