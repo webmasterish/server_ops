@@ -346,7 +346,12 @@ Things to look at that no threshold can judge:
 
 - **Log volume against the 30-day window.** Re-measure with
   `find /var/www/vhosts -name '*.log.1' -printf '%s\n' | awk '{s+=$1} END {print s/1048576}'`.
-  It was 59 MB/day on 2026-07-30 and 71 MB/day on 2026-08-09.
+  It was 59 MB/day on 2026-07-30, 71 MB/day on 2026-08-09 and 53 MB/day on
+  2026-10-03 (ayatalquran.com access log alone 35 MB of that).
+- **PHP error-log noise.** On 2026-10-03 videotizer.com wrote ~4.9 MB/day of
+  `php-error.log`, almost all `open_basedir` warnings from code probing four
+  Chrome/Chromium binary paths (~3.2k times/day each), plus 2/day fatals at
+  `Add_Listing_Page.php:2987` (`$Settings` is null). Site code, not server.
 - **Traffic shape.** On 2026-08-09 roughly 65% of ayatalquran.com's 149k daily
   requests were self-identified bots. Worth a Cloudflare bot rule; costs
   nothing and cuts both log volume and PHP load.
