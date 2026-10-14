@@ -13,7 +13,7 @@ session file, not the chat.
 
 This repo has **no deploy step** — nothing here is served (see `.claude/CLAUDE.md`).
 Scripts in this repo *act on* servers; that happens during the session, deliberately,
-never as part of a wrap-up. `/done` never touches `hetzner` or `hostinger`.
+never as part of a wrap-up. `/done` never touches `hetzner`.
 
 ---
 
@@ -44,8 +44,8 @@ Ambiguous or unrecognised wording → ask, don't guess.
 Before touching anything: if a background task, subagent, or long-running command is
 still going, **stop and say so**. Don't wrap a session whose work hasn't landed.
 
-This repo's specific case: **migration transfers**. An `rsync`, `scp`, `mysqldump` or
-backup script against `hostinger` or `hetzner` can run for hours. Check for running
+This repo's specific case: **long transfers**. An `rsync`, `scp`, `mysqldump`, restic
+backup or restore drill against `hetzner` can run for a long time. Check for running
 background shells before wrapping. A session file that says "backup complete" when the
 transfer is at 60% is worse than no session file.
 
@@ -63,11 +63,12 @@ recording **what was still running and how to check on it**.
    **Skip** anything the repo already records (code structure, past fixes, git history,
    CLAUDE.md) or that only mattered to this conversation.
 2. **Project docs** — this repo's docs *are* the deliverable, more than its code is.
-   If the session changed what we know about either server, update the relevant file:
-   - `docs/inventory.md` — server state, site facts, blockers, migration order.
-     Anything discovered by inspecting a server belongs here, not just in the chat.
+   If the session changed what we know about the server, update the relevant file:
    - `docs/` runbooks — if a procedure was worked out, write it down so it's repeatable.
-   - `migration/` — working notes and logs for the Hostinger migration.
+     Anything discovered by inspecting the server belongs in docs, not just in the chat
+     (e.g. review figures go in `docs/runbook-health-checks.md`).
+   - `docs/inventory.md` and `migration/` are **closed** historical records of the
+     Hostinger migration. Don't add new work to them.
    - `.claude/CLAUDE.md` — only for conventions and standing rules. If reality was found
      to contradict CLAUDE.md, **fix CLAUDE.md** rather than leaving the contradiction
      (this has already happened once, with nginx vs Apache).
@@ -99,7 +100,7 @@ Only on files this session changed. These exist because of this repo's standing 
 3. **No `__*` paths staged** — local-only by convention and gitignored. If one shows up
    as tracked, stop and flag it.
 4. **`bash -n`** on every changed `.sh` file. A syntax error in a provisioning or backup
-   script must never be the thing you discover mid-migration.
+   script must never be the thing you discover when it's needed.
 5. **Idempotency sanity check** — if a script under `scripts/` was added or changed, does
    re-running it do the right thing? CLAUDE.md prefers idempotent scripts over one-off
    commands. Not a hard gate; note it in the session file if it's not idempotent yet.
@@ -119,9 +120,9 @@ work-in-progress is the failure mode this step exists to prevent.
    — that's the concurrent-edit case and it can't be resolved by guessing.
 5. Commit on `main` (no branches, no PRs), using conventional-commit style:
    `type(scope): imperative summary`, e.g.
-   `docs(inventory): drop woo.lushlebanon from migration scope`.
-   Useful scopes here: `inventory`, `dns`, `hetzner`, `hostinger`, `backup`, `migration`,
-   `scripts`, `templates`, `skills`. Body only when the *why* isn't obvious from the
+   `docs(hetzner): record 2026-10-03 monthly review figures`.
+   Useful scopes here: `hetzner`, `dns`, `backup`, `health`, `scripts`, `templates`,
+   `skills`. Body only when the *why* isn't obvious from the
    summary. Keep the `Co-Authored-By` trailer.
 6. Separate concerns → separate commits. Don't force one commit over unrelated work.
 7. Nothing to commit → say so and move on. Not an error.
@@ -158,8 +159,8 @@ readable cold, weeks later, by someone who wasn't here.
 - Include rejected options where the rejection is the useful bit.
 
 ## Server state touched
-- `hetzner` / `hostinger` — what was inspected or changed, and whether it was
-  read-only. Say plainly if a server was modified.
+- `hetzner` — what was inspected or changed, and whether it was read-only. Say
+  plainly if the server was modified.
 - Omit this section entirely if no server was touched.
 
 ## Changes
@@ -167,21 +168,17 @@ readable cold, weeks later, by someone who wasn't here.
 - **Commit:** `<sha>` `type(scope): summary`  (or "not committed — <reason>")
 - **Pushed:** yes / no / FAILED — <error>
 
+## Saved to memory / docs
+- `memory/<file>.md` — one line on what it records.
+- `docs/<file>.md` — section updated.
+
 ## Open / deferred
 - What's unfinished, and why it was left.
 
 ## Needs doing elsewhere
-- Commands to run against a server, things to do in hPanel / Cloudflare / GoDaddy,
-  anything waiting on a person. Exact commands in a code block, copy-pasteable.
-
-## Deadline watch
-- Only while the Hostinger migration is live. Days remaining to 2026-07-31, and
-  which of the two hard items (verified backups / DNS off Hostinger NS) are done.
-- Drop this section once both are complete.
-
-## Saved to memory / docs
-- `memory/<file>.md` — one line on what it records.
-- `docs/<file>.md` — section updated.
+- Commands to run against the server, things to do in Cloudflare / Hetzner console /
+  GoDaddy, anything waiting on a person (e.g. a reboot). Exact commands in a code
+  block, copy-pasteable.
 
 ## Pick up from here
 
@@ -193,6 +190,9 @@ to Claude, not a description of the past.>
 ```
 
 Omit any section that would be empty — an empty "Open / deferred" is noise.
+Keep this order: everything from "Open / deferred" to the end is what the user copies
+into their own notes as a continue-from-here block, so nothing retrospective (like
+"Saved to memory / docs") belongs after it.
 Follow the house formatting rules: **no markdown blockquotes** anywhere (the `▎` gutter
 breaks copy-paste), copyable content in code blocks.
 
@@ -207,12 +207,11 @@ Keep the chat reply itself to a few lines beyond the file — the file *is* the 
 
 ## Notes
 
-- `/done` is a standing instruction to push. It does **not** authorise touching a server:
-  the read-only rule on `hostinger` and the show-me-first rule on `hetzner` both still
-  apply, and `/done` never runs a command against either.
+- `/done` is a standing instruction to push. It does **not** authorise touching the
+  server: the show-me-first rule on `hetzner` still applies, and `/done` never runs a
+  command against it.
 - It's fine to run mid-session as a checkpoint. It does **not** replace saving an
   important fact the moment it appears.
-- While the migration is active, the most valuable thing this skill produces is the
-  **deadline watch** and **needs doing elsewhere** sections — several required steps
-  (hPanel cron export, Cloudflare zone moves) can only be done by a person, and they are
-  easy to lose track of between sessions.
+- The most valuable thing this skill produces is the block from **open / deferred** to
+  the end — some steps (reboots, Cloudflare changes) can only be done by a person, and
+  they are easy to lose track of between sessions.
