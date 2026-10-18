@@ -26,7 +26,7 @@ do not resurface it as an open item. Historical detail is in
 
 ## Current objective
 
-Run and improve `hetzner`. All 15 sites are live on it. Mostly low-traffic
+Run and improve `hetzner`. All 16 sites are live on it. Mostly low-traffic
 static HTML and WordPress, plain Apache + PHP with no hosting control panel,
 provisioned by the scripts in this repo. Apache is the deliberate choice: it
 matches the local dev environment.
@@ -46,7 +46,7 @@ monthly review and quarterly restore drill. Start at
 - One PHP-FPM pool per site. Sized deliberately against traffic, not one
   number everywhere — `scripts/tune-fpm-pools.sh` holds the sizing and the
   reasoning. Keep `sum(pm.max_children)` under RAM+swap.
-- WordPress lives at `<docroot>/cms/`, not at the docroot. All ten installs
+- WordPress lives at `<docroot>/cms/`, not at the docroot. All eleven installs
   follow this. It is load-bearing for the origin probe blocks in
   `templates/block-wp-probes.conf` — check before breaking the pattern.
 - Certs via certbot. WordPress managed with wp-cli.

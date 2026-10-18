@@ -436,7 +436,7 @@ must be addressed directly.
 for d in ayatalquran.com dotaim.com grand-emerald.com hirement.com \
          lamarkazia.com lebanese.tech menamaps.com nidaldirani.com \
          nizonet.com sasf-ksa.com skinosis.com videotizer.com \
-         mardini.net singlefunction.com webmasterish.com \
+         mardini.net singlefunction.com webmasterish.com seaznd.com \
          analytics.dotaim.com memories.mardini.net; do
   printf '%-26s %s\n' "$d" \
     "$(curl -k -s -o /dev/null -w '%{http_code}' \
@@ -444,7 +444,7 @@ for d in ayatalquran.com dotaim.com grand-emerald.com hirement.com \
 done
 ```
 
-Expected: 16 × `200`, and `memories.mardini.net` → `302`. That 302 is its
+Expected: 17 × `200`, and `memories.mardini.net` → `302`. That 302 is its
 normal state, not a fault.
 
 Then check Redis before restarting it. It holds ~500k keys, but they are

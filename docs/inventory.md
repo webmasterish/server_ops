@@ -304,9 +304,10 @@ agree.
 
 ### 3.2b WordPress layout — all installs live at `/cms`
 
-All **ten** WordPress sites keep WordPress in a `cms/` subdirectory of the
+All **eleven** WordPress sites keep WordPress in a `cms/` subdirectory of the
 docroot, not at the root: ayatalquran, dotaim.com, grand-emerald, hirement,
-lebanese.tech, menamaps, nidaldirani, skinosis, videotizer, singlefunction.
+lebanese.tech, menamaps, nidaldirani, skinosis, videotizer, singlefunction,
+seaznd (added 2026-10-12, verified 2026-10-18: `/wp-login.php` → `/cms/`).
 `/wp-login.php` 302-redirects to `/cms/wp-login.php`.
 
 This is load-bearing, not incidental. It is why ~5,000 automated login POSTs a
@@ -318,9 +319,12 @@ site serves WordPress from its document root.
 
 ### 3.2c OS updates, kernel and Ubuntu Pro  *(added 2026-08-30)*
 
-Kernel is **6.8.0-142-generic** as of 2026-09-26. It was installed by
-unattended-upgrades on 2026-09-25 and activated by a reboot on 2026-09-26
-(previous: 6.8.0-138, rebooted 2026-08-30) — see
+Kernel is **6.8.0-147-generic** as of 2026-10-18, activated by a reboot that
+day after the `reboot` row WARNed at 7 days pending (-146 and -147 had both
+landed). All 17 baseline URLs matched before and after, health check OK.
+The 26 non-kernel updates pending at the time were deferred. Before that:
+6.8.0-142, installed by unattended-upgrades on 2026-09-25 and activated by a
+reboot on 2026-09-26 (previous: 6.8.0-138, rebooted 2026-08-30) — see
 `docs/runbook-health-checks.md` for the reboot procedure. The 2026-09-26
 reboot was ~14 days overdue because the health check's pending-age counter
 reset when the new kernel rewrote the flag file; that is fixed (see the
@@ -378,9 +382,23 @@ Apache configs symlinked out of each site's own `config/` directory into
 | dotaim.com (+www) | `/var/www/vhosts/dotaim/dotaim.com/httpdocs` | `dotaim_website_wp` | 1.4 MB |
 | ayatalquran.com | `/var/www/vhosts/dotaim/ayatalquran.com/httpdocs` | `ayatalquran_website_wp` | 42.9 MB |
 | analytics.dotaim.com | `.../dotaim.com/subs/analytics.dotaim.com/httpdocs` | `dotaim_analytics_matomo` | **1023.6 MB** |
+| seaznd.com (+www) | `/var/www/vhosts/dotaim/seaznd.com/httpdocs` | `seaznd_website_wp` | 2.6 MB |
 
 Plus `000-default.conf`. Matomo's database is by far the largest thing on the
 box and is growing.
+
+**seaznd.com** was added 2026-10-12, after the migration: WordPress 7.1.3 at
+`cms/`, cert for `seaznd.com` + `www`. Confirmed 2026-10-18 to be in the
+nightly restic snapshot (files, `seaznd_website_wp` dumps, vhost configs)
+with no backup change needed — the backup covers `/var/www/vhosts` and every
+database by discovery, not by list. **For its first six days it had no FPM
+pool of its own:** its vhost had no `SetHandler`, so its PHP fell through to
+the shared 8.3 `www.conf` pool (5 children) via
+`conf-enabled/php-fpm-default.conf` — the same pool that absorbs scanner
+noise. Since 2026-10-18 it has its own 8.3 pool at 4 children
+(`MAX_CHILDREN=4 set-site-php.sh dotaim seaznd.com 8.3`), listed in
+`scripts/tune-fpm-pools.sh`; `sum(pm.max_children)` is now 67. See
+`docs/runbook-fpm.md` for how to catch the next one.
 
 ### 3.3b Target vhost grouping (decided 2026-07-28)
 

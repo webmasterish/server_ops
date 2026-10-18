@@ -66,6 +66,20 @@ Two defences, both in place:
 
 **Any new vhost must get one or the other before it serves a `.php` file.**
 
+The fallback is a safety net, not a home. A site that only ever gets it works
+perfectly and looks finished, which is why it goes unnoticed: seaznd.com ran
+for six days (2026-10-12 → 10-18) on the shared 8.3 `www.conf` pool — 5
+children, shared with all the scanner noise, no `open_basedir`, no per-site
+`php-error.log`. A new PHP site is not done until it has run `set-site-php.sh`
+**and** has an entry in `scripts/tune-fpm-pools.sh`. Check with:
+
+```bash
+grep -L 'PHP-HANDLER-START' /var/www/vhosts/*/*/config/vhost-ssl.conf \
+                            /var/www/vhosts/*/*/subs/*/config/vhost-ssl.conf
+```
+
+Anything listed is either static HTML (fine) or on the fallback (not fine).
+
 ## Per-site limit overrides
 
 A site needing non-default `php_admin_value` limits gets a file at

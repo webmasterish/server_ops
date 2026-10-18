@@ -42,6 +42,9 @@
 #
 # Result: 63 children x ~54 MB = ~3400 MB, 58% of RAM+swap. That leaves the
 # median room to drift to ~93 MB before the check warns again.
+#
+# seaznd.com (added 2026-10-12, own pool 2026-10-18) takes the long-tail 4:
+# 67 children x ~54 MB = ~3620 MB, 62% of RAM+swap, room to drift to ~87 MB.
 
 set -euo pipefail
 
@@ -66,6 +69,7 @@ declare -A TARGET=(
   [singlefunction.com]=4
   [skinosis.com]=4
   [videotizer.com]=4
+  [seaznd.com]=4
 )
 # www.conf is per-PHP-version, so it is keyed separately below.
 declare -A WWW_TARGET=(
