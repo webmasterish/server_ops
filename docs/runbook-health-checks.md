@@ -357,6 +357,10 @@ Things to look at that no threshold can judge:
   nothing and cuts both log volume and PHP load.
 - **Pending package updates and reboots.** The daily check warns at 7 days
   pending; the monthly review is where you actually schedule the window.
+- **PHP advisories for the PPA branches.** Nothing patches 7.4 or 8.5
+  automatically. Compare `apt-cache policy php7.4-fpm php8.5-fpm` Installed
+  against Candidate after an `apt update`. See `docs/php-versions.md`,
+  "Security patches".
 - **Pool count against `fpm/headroom`.**
 
 ## Quarterly restore drill
