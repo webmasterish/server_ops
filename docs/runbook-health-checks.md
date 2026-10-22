@@ -7,7 +7,7 @@ fires. Decided 2026-08-09.
 
 | cadence | what | who | cost |
 |---|---|---|---|
-| daily 06:30 UTC | `health-check.sh` — backups, capacity, services, certs | unattended | silent unless something is wrong |
+| daily 07:15 UTC | `health-check.sh` — backups, capacity, services, certs | unattended | silent unless something is wrong |
 | 1st of month 09:00 UTC | `review-reminder.sh` pushes the review prompt | unattended | one notification |
 | monthly | `health-check.sh --report` + `audit-sites.sh` | you, with Claude | ~15 min |
 | quarterly | restore drill from R2 | you, with Claude | ~30 min |
@@ -19,7 +19,7 @@ runbook that documents an intention.
 It is deliberately **not** part of `health-check.sh`. A chore is not a fault:
 folding it in would make the daily check go non-OK for a reason unrelated to
 the health of the machine, and once WARN can mean "it is the 1st", you have
-taught yourself to skim past WARN. It also arrives at 09:00 rather than 06:30
+taught yourself to skim past WARN. It also arrives at 09:00 rather than 07:15
 so it does not get read as part of the daily batch and dismissed with it.
 
 The reminder tracks the restore drill in `/var/lib/health-check/last-restore-drill`
@@ -89,7 +89,7 @@ It filters on `--tag nightly` deliberately. The `hostinger-archive` snapshot
 renewed; counting it would make the repository look fresh forever.
 
 36h rather than 24h: the backup starts at 03:15 with up to 15m of jitter and
-runs ~12 minutes, and the check is at 06:30. A 24h window would false-alarm on
+runs ~12 minutes, and the check is at 07:15. A 24h window would false-alarm on
 the first slow night. 36h still catches a single missed run.
 
 ### The cross-boot trap
@@ -398,7 +398,7 @@ nobody can prove happened.
 | `disk/root` | `du -sh /var/www/vhosts/*/*/logs` first — logs are the usual cause and the safest thing to shed. |
 | `certs` | `sudo certbot renew --dry-run` for the named cert. Usually DNS or a redirect breaking the HTTP-01 challenge. |
 | `apache/configtest` | Do **not** restart Apache. Fix the syntax first; the running config is still serving. |
-| `svc/*` down | `systemctl status <unit>` then `journalctl -u <unit> -n 50`. |
+| `svc/*` down | `systemctl status <unit>` then `journalctl -u <unit> -n 50`. If the unit restarted within seconds of the check, look at `/var/log/apt/history.log` for an unattended-upgrades run at the same minute — needrestart restarts services after library updates. That was the 2026-10-22 false FAIL (redis + R2 read), and why the timer moved from 06:30 to 07:15. |
 | `ssh/passwordauth` | Something re-enabled it. `sudo sshd -T \| grep -i password`, then check `/etc/ssh/sshd_config.d/`. |
 | `fpm/headroom` | A pool was added. Either lower `pm.max_children` on the new pool or accept it deliberately. |
 | `reboot` | A kernel update is waiting and nothing will apply it but you. See "Rebooting hetzner" below. |

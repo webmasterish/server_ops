@@ -5,7 +5,7 @@
 #   sudo ./health-check.sh           # terse: only WARN/FAIL lines, then a verdict
 #   sudo ./health-check.sh --report  # every check, including the OK ones
 #
-# Normally invoked by health-check.timer at 06:30 UTC and never read by a
+# Normally invoked by health-check.timer at 07:15 UTC and never read by a
 # human: silence means healthy. See docs/runbook-health-checks.md.
 #
 # Scope is deliberately the *machine* -- backups, capacity, services, certs.
@@ -41,7 +41,7 @@ REPORT=0
 # ---------------------------------------------------------------------------
 
 # 36h, not 24h. The backup runs at 03:15 with up to 15m of RandomizedDelaySec,
-# and the check runs at 06:30. A 24h window would false-alarm the first time a
+# and the check runs at 07:15. A 24h window would false-alarm the first time a
 # run took longer than usual; 36h still catches a single missed night.
 SNAPSHOT_MAX_AGE_H=36
 
@@ -374,9 +374,15 @@ check_services() {
 
 check_failed_units() {
   local n list
-  n=$(systemctl list-units --state=failed --no-legend --plain 2>/dev/null | grep -c . || true)
+  # health-check.service itself is excluded: after a failed run it stays
+  # "failed" until the next one, so a manual --report would FAIL on the
+  # previous run's verdict -- a failure already reported, not a new one.
+  local units
+  units=$(systemctl list-units --state=failed --no-legend --plain 2>/dev/null \
+    | awk '$1 != "health-check.service" {print $1}')
+  n=$(grep -c . <<<"${units}" || true)
   if (( n > 0 )); then
-    list=$(systemctl list-units --state=failed --no-legend --plain 2>/dev/null | awk '{print $1}' | paste -sd, -)
+    list=$(paste -sd, - <<<"${units}")
     fail "systemd/failed" "${n} failed unit(s): ${list}"
   else
     ok "systemd/failed" "none"

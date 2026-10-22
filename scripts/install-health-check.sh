@@ -7,7 +7,7 @@
 #
 # Installs templates/systemd/health-check.{service,timer} and enables the
 # timer. Runs the check once first: a monitor that has never been observed to
-# pass is not a monitor, it is an untested script that will page you at 06:30.
+# pass is not a monitor, it is an untested script that will page you at 07:15.
 #
 # Idempotent. Backs up any existing unit before overwriting.
 #

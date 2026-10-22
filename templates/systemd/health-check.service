@@ -5,6 +5,10 @@ Documentation=file:///home/webmasterish/server_ops/docs/runbook-health-checks.md
 # only check in the script that leaves the box.
 Wants=network-online.target
 After=network-online.target
+# Belt to the timer's braces: if both are queued at once (Persistent= catch-up
+# after a reboot), wait for unattended-upgrades to finish restarting services
+# rather than reporting them down mid-restart.
+After=apt-daily-upgrade.service
 
 [Service]
 Type=oneshot
