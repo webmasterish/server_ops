@@ -346,15 +346,20 @@ Things to look at that no threshold can judge:
 
 - **Log volume against the 30-day window.** Re-measure with
   `find /var/www/vhosts -name '*.log.1' -printf '%s\n' | awk '{s+=$1} END {print s/1048576}'`.
-  It was 59 MB/day on 2026-07-30, 71 MB/day on 2026-08-09 and 53 MB/day on
-  2026-10-03 (ayatalquran.com access log alone 35 MB of that).
+  It was 59 MB/day on 2026-07-30, 71 MB/day on 2026-08-09, 53 MB/day on
+  2026-10-03 (ayatalquran.com access log alone 35 MB of that) and 105 MB/day
+  on 2026-11-03 (ayatalquran.com 72 MB; its daily requests climbed from
+  ~100-200k in mid-October to 250-580k in the last five days).
 - **PHP error-log noise.** On 2026-10-03 videotizer.com wrote ~4.9 MB/day of
   `php-error.log`, almost all `open_basedir` warnings from code probing four
   Chrome/Chromium binary paths (~3.2k times/day each), plus 2/day fatals at
   `Add_Listing_Page.php:2987` (`$Settings` is null). Site code, not server.
+  On 2026-11-03 it was ~9.6 MB/day: same four paths, now ~6.7k times/day each.
 - **Traffic shape.** On 2026-08-09 roughly 65% of ayatalquran.com's 149k daily
   requests were self-identified bots. Worth a Cloudflare bot rule; costs
-  nothing and cuts both log volume and PHP load.
+  nothing and cuts both log volume and PHP load. On 2026-11-03 it was 84% of
+  289k, with Claude-SearchBot alone at 144k (half of all requests), then
+  SemrushBot, Amzn-SearchBot and AhrefsBot at ~20k each.
 - **Pending package updates and reboots.** The daily check warns at 7 days
   pending; the monthly review is where you actually schedule the window.
 - **PHP advisories for the PPA branches.** Nothing patches 7.4 or 8.5
@@ -386,8 +391,10 @@ sudo rm -rf /tmp/drill
 ```
 
 A clean `diff -r` and a passing `bunzip2 -t` is the whole drill. Record the
-date it was last done in `migration/status.md` — an undated drill is a drill
-nobody can prove happened.
+date with `sudo ~/server_ops/scripts/review-reminder.sh --drill-done` (writes
+`/var/lib/health-check/last-restore-drill`, which the reminder reads) — an
+undated drill is a drill nobody can prove happened. As of 2026-11-03 no drill
+had ever been recorded.
 
 ## When a check fires
 
