@@ -47,8 +47,11 @@ monthly review and quarterly restore drill. Start at
   number everywhere — `scripts/tune-fpm-pools.sh` holds the sizing and the
   reasoning. Keep `sum(pm.max_children)` under RAM+swap.
 - WordPress lives at `<docroot>/cms/`, not at the docroot. All eleven installs
-  follow this. It is load-bearing for the origin probe blocks in
-  `templates/block-wp-probes.conf` — check before breaking the pattern.
+  follow this. `wp-config.php` is the exception: it sits at the docroot, one
+  level above `cms/` (WordPress looks in the parent of ABSPATH), and that is
+  where `audit-sites.sh` checks it. The `cms/` layout is load-bearing for the
+  origin probe blocks in `templates/block-wp-probes.conf` — check before
+  breaking the pattern.
 - Certs via certbot. WordPress managed with wp-cli.
 - All sites sit behind Cloudflare. Two consequences worth remembering: origin
   firewall rules cannot ban a real client (the packets arrive from
