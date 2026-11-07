@@ -85,6 +85,25 @@ Three things that went wrong that day and will again:
   backports. Confirm the CVE is named in the changelog, every time. The real fix
   is moving lebanese.tech and singlefunction.com to 8.3.
 
+### Matomo's "Urgent PHP security update required" banner
+
+Matomo (analytics.dotaim.com, on 8.3) shows this banner after an update because
+it reads the version string. It will always say 8.3.6 on Ubuntu, so **the banner
+cannot be cleared by patching**. Ignore it once the CVE it links is confirmed in
+the 8.3 changelog. Checked 2026-11-07: it linked the PHP2Shell advisory, which
+`…24.04.13` fixes.
+
+The other entries on php.net's 2026 security list as of 2026-11-07:
+
+- **CVE-2026-115560** (2026-10-23, session upload progress). No upstream fix
+  yet. It is only reachable when `session.serialize_handler` is *configured* as
+  `php_binary`/`php_serialize` and switched to `php` at runtime. Here the config
+  is `php` on all three branches, with no per-site override. Matomo switches the
+  other way (`php` → `php_serialize`), so the pattern can't occur. Optional
+  hardening: `session.upload_progress.enabled=0`. Recheck when it gets a fix.
+- **CVE-2026-111497** (2026-10-26, Brotli). Windows builds only, so not
+  applicable here.
+
 ## CLI default
 
 `php` on the command line stays **8.3**. wp-cli follows it, and every script in
